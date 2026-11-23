@@ -1,0 +1,8 @@
+[Unit]
+Description=Retencja archiwum Maestro: usuwa pliki archiwum starsze niż 365 dni (notatki zostają)
+
+[Service]
+Type=oneshot
+User=maestro
+Group=maestro
+ExecStart=/usr/bin/find /home/maestro/maestro/archiwum -type f -mtime +365 -delete

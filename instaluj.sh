@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Instalator fabryki i obserwatora na czysty serwer Ubuntu (Hostinger KVM 2).
+# Instalator fabryki i Maestro na czysty serwer Ubuntu (Hostinger KVM 2).
 # Uruchamiany jako root poleceniem z README.md: pobranie z tagu i sprawdzenie sumy SHA-256.
 # Dziesięć kroków; każdy sprawdza stan przed działaniem, więc ponowne uruchomienie jest bezpieczne.
 #
@@ -16,10 +16,10 @@ set -euo pipefail
 # użytkownika).
 
 REPO="lukeblonski/maestro-install"
-WERSJA="v1.0.19"
+WERSJA="v1.0.20"
 # Suma SHA-256 pliku zestaw-fabryki.tar.gz wydania WERSJA, zrobionego przez scripts/zestaw_fabryki.py z tagu
 # zestaw-<WERSJA> laboratorium; 64 zera do przypięcia przy wydaniu.
-ZESTAW_SUMA="49bf36e6554c46c90006bf1e10ece875cb7ce6345029eb64a84a8b9075a106bd"
+ZESTAW_SUMA="a68a3c3d9576e3f6fea41576bc3b6e23c09237d998fd70e32ffb441f76f16b51"
 
 # gitleaks w wersji z szablonu CI guardrails (skills/guardrails/templates/ci.yml, GITLEAKS_VERSION) i suma SHA-256
 # archiwum linux_x64 z oficjalnego pliku sum tego wydania (gitleaks_8.30.1_checksums.txt).
@@ -43,39 +43,41 @@ PROBA_PRZEGLADARKI='<!doctype html><body><script>document.body.textContent=new U
 # żeby gałąź o tej samej nazwie go nie przesłoniła; pliki tagu chroni niezmienne wydanie.
 # Nieudane pobranie kończy instalator kodem 1, zanim cokolwiek się zmieni.
 PLIKI=(
-  "sudoers-obserwator"
+  "sudoers-maestro"
   "start-fabryki.sh"
   "skrzynka.py"
-  "start-obserwatora.sh"
-  "obserwator.service"
-  "fabryka-retencja-obserwatora.service"
-  "fabryka-retencja-obserwatora.timer"
-  "obserwator/CLAUDE.md"
-  "obserwator/CLAUDE-autor.md"
-  "obserwator/narzedzia/wyslij.sh"
-  "obserwator/narzedzia/porzadki-notatek.sh"
-  "obserwator/skills/analiza-w-poprzek/SKILL.md"
-  "obserwator/skills/przeglad-po-projekcie/SKILL.md"
-  "obserwator/skills/porzadki-notatek/SKILL.md"
+  "start-maestro.sh"
+  "maestro.service"
+  "maestro-retencja.service"
+  "maestro-retencja.timer"
+  "maestro/CLAUDE.md"
+  "maestro/CLAUDE-autor.md"
+  "maestro/narzedzia/wyslij.sh"
+  "maestro/narzedzia/porzadki-notatek.sh"
+  "maestro/skills/analiza-w-poprzek/SKILL.md"
+  "maestro/skills/przeglad-po-projekcie/SKILL.md"
+  "maestro/skills/porzadki-notatek/SKILL.md"
 )
 
 # Pliki serwera w jednym drzewie roota (wzor_serwera, drzewo_roota): skrypty startowe, wykonawca rozmowy, umowa Maestro
-# w $LIB/obserwator/CLAUDE.md i narzędzia Maestro w $LIB/obserwator/narzedzia; konta fabryka i obserwator ich nie zmienią.
+# w $LIB/maestro/CLAUDE.md i narzędzia Maestro w $LIB/maestro/narzedzia; konta fabryka i maestro ich nie zmienią.
 LIB=/usr/local/lib/fabryka-serwer
-# Foldery wiadomości obserwatora: skrzynkę pisze tylko obserwator, wyniki tylko fabryka.
-# W przekazaniu obserwator kładzie plik z wynikiem pracy w panelu usługi, a fabryka go czyta i usuwa.
+# Foldery wiadomości Maestro: skrzynkę pisze tylko maestro, wyniki tylko fabryka.
+# W przekazaniu maestro kładzie plik z wynikiem pracy w panelu usługi, a fabryka go czyta i usuwa.
 SERWER=/var/lib/fabryka-serwer
 SKRZYNKA="$SERWER/skrzynka"
 WYNIKI="$SERWER/wyniki"
 PRZEKAZANIE="$SERWER/przekazanie"
 JEDNOSTKI=/etc/systemd/system
-SUDOERS_CEL=/etc/sudoers.d/fabryka-obserwator
+SUDOERS_CEL=/etc/sudoers.d/maestro
 APPARMOR_ROOTLESSKIT=/etc/apparmor.d/usr.bin.rootlesskit
 LOG=/var/log/fabryka-instalator.log
 
-OBS_HOME=/home/obserwator
+# Nazwa konta Maestro w wydaniach do v1.0.19: instalator przy nim staje (konto_pod_stara_nazwa).
+STARE_KONTO="obserwator"
+OBS_HOME=/home/maestro
 FAB_HOME=/home/fabryka
-OBS_DIR=/home/obserwator/obserwator
+OBS_DIR=/home/maestro/maestro
 LAB_DIR=/home/fabryka/fabryka
 NOTATKI="$OBS_DIR/notatki"
 ARCHIWUM="$OBS_DIR/archiwum"
@@ -83,9 +85,9 @@ ARCHIWUM="$OBS_DIR/archiwum"
 ARCHIWUM_NOTATEK="$OBS_DIR/archiwum-notatek"
 OBS_SETTINGS="$OBS_HOME/.claude/settings.json"
 OBS_SKILLE="$OBS_HOME/.claude/skills"
-# Osobiste skille Claude Code konta obserwator w trybie autora: wzór każdego to obserwator/skills/<nazwa>/SKILL.md
+# Osobiste skille Claude Code konta maestro w trybie autora: wzór każdego to maestro/skills/<nazwa>/SKILL.md
 # z PLIKI. W trybie użytkownika skill porzadki-notatek jest w $ZARZADZANE, a skille autora (SKILLE_AUTORA) nie ma.
-SKILLE_OBSERWATORA=(analiza-w-poprzek przeglad-po-projekcie porzadki-notatek)
+SKILLE_MAESTRO=(analiza-w-poprzek przeglad-po-projekcie porzadki-notatek)
 SKILLE_AUTORA=(analiza-w-poprzek przeglad-po-projekcie)
 OBS_STAN="$OBS_HOME/.claude.json"
 OBS_CLAUDE="$OBS_HOME/.local/bin/claude"
@@ -303,6 +305,15 @@ archiwum_z_wydania() {
   napisz "Archiwum zestawu Factory z wydania $WERSJA pobrane (suma SHA-256 zgodna)."
 }
 
+# konto_pod_stara_nazwa: serwer z kontem STARE_KONTO i bez konta maestro ma Maestro z wydania do v1.0.19.
+# Instalator nie zakłada wtedy drugiego konta i nie przenosi starego: kończy się kodem 1, zanim cokolwiek
+# zmieni (przed folderem tymczasowym, dziennikiem, apt-get i useradd). Przeniesienie robi blok z instrukcji wydania.
+konto_pod_stara_nazwa() {
+  if id -u "$STARE_KONTO" > /dev/null 2>&1 && ! id -u maestro > /dev/null 2>&1; then
+    przerwij "Ten serwer ma Maestro pod starą nazwą $STARE_KONTO: wklej najpierw blok przeniesienia z instrukcji wydania albo zainstaluj na czystym serwerze."
+  fi
+}
+
 # --- warunki startu ----------------------------------------------------------------------------------------
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -325,6 +336,7 @@ case "$SYSTEM_WERSJA" in
   *) echo "Uwaga: Ubuntu $SYSTEM_WERSJA nie jest sprawdzone (sprawdzone: 24.04 i 26.04). Instalator idzie dalej." ;;
 esac
 
+konto_pod_stara_nazwa
 czytaj_opcje "$@"
 cd /
 umask 022
@@ -512,25 +524,25 @@ drzewo_roota() {
   zainstaluj_plik "$nowe" "$lista" 0600 || true
 }
 
-# wzor_serwera <folder>: wzór drzewa $LIB z pobranych plików: start-fabryki.sh, skrzynka.py, start-obserwatora.sh,
-# umowa Maestro obserwator/CLAUDE.md (w trybie autora umowa i dodatek autora obserwator/CLAUDE-autor.md sklejone w jeden
-# plik, z pustą linią między nimi) i narzędzia Maestro obserwator/narzedzia/{wyslij.sh,porzadki-notatek.sh}. Skrypty
+# wzor_serwera <folder>: wzór drzewa $LIB z pobranych plików: start-fabryki.sh, skrzynka.py, start-maestro.sh,
+# umowa Maestro maestro/CLAUDE.md (w trybie autora umowa i dodatek autora maestro/CLAUDE-autor.md sklejone w jeden
+# plik, z pustą linią między nimi) i narzędzia Maestro maestro/narzedzia/{wyslij.sh,porzadki-notatek.sh}. Skrypty
 # i narzędzia mają tryb 0755, umowa 0644.
 wzor_serwera() {
   local wzor="$1" plik
-  mkdir -p -- "$wzor/obserwator/narzedzia" || przerwij "Nie mogę założyć wzoru plików serwera $wzor."
-  for plik in start-fabryki.sh skrzynka.py start-obserwatora.sh obserwator/narzedzia/wyslij.sh \
-    obserwator/narzedzia/porzadki-notatek.sh; do
+  mkdir -p -- "$wzor/maestro/narzedzia" || przerwij "Nie mogę założyć wzoru plików serwera $wzor."
+  for plik in start-fabryki.sh skrzynka.py start-maestro.sh maestro/narzedzia/wyslij.sh \
+    maestro/narzedzia/porzadki-notatek.sh; do
     cp -- "$POBRANE/$plik" "$wzor/$plik" || przerwij "Nie mogę położyć $plik we wzorze plików serwera."
     chmod 0755 "$wzor/$plik" || przerwij "Nie mogę ustawić trybu $plik we wzorze plików serwera."
   done
   if [ "$TRYB" = autor ]; then
-    { cat -- "$POBRANE/obserwator/CLAUDE.md" && printf '\n' && cat -- "$POBRANE/obserwator/CLAUDE-autor.md"; } \
-      > "$wzor/obserwator/CLAUDE.md" || przerwij "Nie mogę skleić umowy Maestro z dodatkiem autora."
+    { cat -- "$POBRANE/maestro/CLAUDE.md" && printf '\n' && cat -- "$POBRANE/maestro/CLAUDE-autor.md"; } \
+      > "$wzor/maestro/CLAUDE.md" || przerwij "Nie mogę skleić umowy Maestro z dodatkiem autora."
   else
-    cp -- "$POBRANE/obserwator/CLAUDE.md" "$wzor/obserwator/CLAUDE.md" || przerwij "Nie mogę położyć umowy Maestro we wzorze."
+    cp -- "$POBRANE/maestro/CLAUDE.md" "$wzor/maestro/CLAUDE.md" || przerwij "Nie mogę położyć umowy Maestro we wzorze."
   fi
-  chmod 0644 "$wzor/obserwator/CLAUDE.md" || przerwij "Nie mogę ustawić trybu umowy Maestro we wzorze."
+  chmod 0644 "$wzor/maestro/CLAUDE.md" || przerwij "Nie mogę ustawić trybu umowy Maestro we wzorze."
 }
 
 # w_grupie <konto> <grupa>
@@ -642,8 +654,8 @@ fi
 
 # --- 2. konta, grupy i reguła sudo -------------------------------------------------------------------------
 
-etap 2 "Konta obserwator i fabryka"
-for konto in fabryka obserwator; do
+etap 2 "Konta maestro i fabryka"
+for konto in fabryka maestro; do
   if id -u "$konto" > /dev/null 2>&1; then
     gotowe "konto $konto już jest"
   else
@@ -652,11 +664,11 @@ for konto in fabryka obserwator; do
   fi
 done
 
-# Fabryka nie widzi obserwatora; obserwator czyta pliki fabryki przez grupę fabryka.
+# Fabryka nie widzi Maestro; Maestro czyta pliki fabryki przez grupę fabryka.
 chmod 0700 "$OBS_HOME"
 chmod 0750 "$FAB_HOME"
-if ! w_grupie obserwator fabryka; then
-  usermod -aG fabryka obserwator
+if ! w_grupie maestro fabryka; then
+  usermod -aG fabryka maestro
 fi
 for grupa in sudo docker; do
   if w_grupie fabryka "$grupa"; then
@@ -666,26 +678,26 @@ for grupa in sudo docker; do
 done
 zakres_podrzedny /etc/subuid --add-subuids
 zakres_podrzedny /etc/subgid --add-subgids
-# umask 022 kont fabryka i obserwator w jednym miejscu: pam_umask czyta "umask=" z pola GECOS przed
+# umask 022 kont fabryka i maestro w jednym miejscu: pam_umask czyta "umask=" z pola GECOS przed
 # ustawieniami z /etc/login.defs (USERGROUPS_ENAB daje 002), więc każda sesja PAM konta (sudo -u, menedżer
 # użytkownika, logowanie) tworzy pliki bez zapisu dla grupy. Fabryka nie daje zapisu grupie fabryka,
-# w której jest obserwator; obserwator nie daje grupie fabryka zapisu w skrzynce.
-for konto in fabryka obserwator; do
+# w której jest maestro; maestro nie daje grupie fabryka zapisu w skrzynce.
+for konto in fabryka maestro; do
   case "$(getent passwd "$konto" | cut -d: -f5)" in
     *umask=022*) ;;
     *) chfn -o umask=022 "$konto" ;;
   esac
 done
-gotowe "tryby katalogów domowych, grupy, umask kont fabryka i obserwator i zakresy podrzędnych identyfikatorów ustawione"
+gotowe "tryby katalogów domowych, grupy, umask kont fabryka i maestro i zakresy podrzędnych identyfikatorów ustawione"
 
-if ! visudo -c -f "$POBRANE/sudoers-obserwator" > /dev/null; then
-  przerwij "Reguła sudo obserwatora nie przechodzi visudo -c -f."
+if ! visudo -c -f "$POBRANE/sudoers-maestro" > /dev/null; then
+  przerwij "Reguła sudo Maestro nie przechodzi visudo -c -f."
 fi
-zainstaluj_plik "$POBRANE/sudoers-obserwator" "$SUDOERS_CEL" 0440 || true
+zainstaluj_plik "$POBRANE/sudoers-maestro" "$SUDOERS_CEL" 0440 || true
 if ! visudo -c > /dev/null; then
-  przerwij "Konfiguracja sudo nie przechodzi visudo -c po dodaniu reguły obserwatora."
+  przerwij "Konfiguracja sudo nie przechodzi visudo -c po dodaniu reguły Maestro."
 fi
-gotowe "reguła sudo obserwatora zainstalowana"
+gotowe "reguła sudo Maestro zainstalowana"
 
 # folder_systemu <folder> <właściciel:grupa> <tryb>: folder systemu zakłada i poprawia root.
 folder_systemu() {
@@ -693,13 +705,13 @@ folder_systemu() {
   chown "$2" "$1" || przerwij "Nie mogę ustawić właściciela $1."
   chmod "$3" "$1" || przerwij "Nie mogę ustawić trybu $1."
 }
-# Skrzynkę pisze tylko obserwator, a fabryka czyta przez grupę (setgid: nowe pliki dostają grupę fabryka).
-# Wyniki pisze tylko fabryka, a obserwator czyta przez grupę fabryka.
+# Skrzynkę pisze tylko maestro, a fabryka czyta przez grupę (setgid: nowe pliki dostają grupę fabryka).
+# Wyniki pisze tylko fabryka, a maestro czyta przez grupę fabryka.
 folder_systemu "$SERWER" root:root 0755
-folder_systemu "$SKRZYNKA" obserwator:fabryka 2750
+folder_systemu "$SKRZYNKA" maestro:fabryka 2750
 folder_systemu "$WYNIKI" fabryka:fabryka 0750
-# Przekazanie: obserwator kładzie plik, fabryka czyta go i usuwa (grupa fabryka z zapisem, setgid, bez bitu sticky).
-folder_systemu "$PRZEKAZANIE" obserwator:fabryka 2770
+# Przekazanie: maestro kładzie plik, fabryka czyta go i usuwa (grupa fabryka z zapisem, setgid, bez bitu sticky).
+folder_systemu "$PRZEKAZANIE" maestro:fabryka 2770
 gotowe "foldery $SKRZYNKA, $WYNIKI i $PRZEKAZANIE założone"
 # Folder z v1.0.4, którego od v1.0.5 nie ma: zgody zapisuje autopilot jak na Macu.
 rm -rf --one-file-system -- "$SERWER/zaufane" || przerwij "Nie mogę usunąć folderu $SERWER/zaufane z v1.0.4."
@@ -707,7 +719,7 @@ gotowe "folderu $SERWER/zaufane nie ma"
 zapisz_tryb
 gotowe "tryb $TRYB zapisany w $TRYB_PLIK"
 # Pliki serwera, umowa i narzędzia Maestro w drzewie roota $LIB: każde uruchomienie przywraca je do wzoru z kopią
-# i wypisem. Zmiana drzewa restartuje sesję obserwatora w etapie 7, bo umowę sesja dostaje przy starcie.
+# i wypisem. Zmiana drzewa restartuje sesję Maestro w etapie 7, bo umowę sesja dostaje przy starcie.
 WZOR_SERWERA="$TMP/serwer"
 wzor_serwera "$WZOR_SERWERA"
 drzewo_roota "$WZOR_SERWERA" "$LIB" serwer
@@ -716,7 +728,7 @@ ZMIANA_SERWERA=$DRZEWO_ZMIENIONE
 # --- 3. Claude Code --------------------------------------------------------------------------------------
 
 etap 3 "Claude Code na obu kontach"
-for konto in obserwator fabryka; do
+for konto in maestro fabryka; do
   if sudo -u "$konto" test -x "/home/$konto/.local/bin/claude"; then
     gotowe "Claude Code na koncie $konto już jest"
   else
@@ -725,11 +737,11 @@ for konto in obserwator fabryka; do
   fi
 done
 
-BLOK_OBSERWATORA='export PATH="$HOME/.local/bin:$PATH"'
+BLOK_MAESTRO='export PATH="$HOME/.local/bin:$PATH"'
 BLOK_FABRYKI='export PATH="$HOME/.local/bin:$PATH"
 umask 022'
 for plik in .profile .bashrc; do
-  dopisz_blok obserwator "$OBS_HOME/$plik" "$ZNACZNIK_PATH" "$BLOK_OBSERWATORA"
+  dopisz_blok maestro "$OBS_HOME/$plik" "$ZNACZNIK_PATH" "$BLOK_MAESTRO"
   dopisz_blok fabryka "$FAB_HOME/$plik" "$ZNACZNIK_PATH" "$BLOK_FABRYKI"
 done
 gotowe "ścieżka do Claude Code w .profile i .bashrc obu kont"
@@ -826,7 +838,7 @@ zaloguj_claude() {
   gotowe "$3 zalogowany"
 }
 
-zaloguj_claude obserwator "$OBS_CLAUDE" "Claude obserwatora"
+zaloguj_claude maestro "$OBS_CLAUDE" "Claude Maestro"
 zaloguj_claude fabryka "$FAB_CLAUDE" "Claude fabryki"
 
 if sudo -u fabryka gh auth status > /dev/null 2>&1; then
@@ -841,42 +853,42 @@ else
 fi
 sudo -u fabryka gh auth setup-git
 
-# --- 6. folder obserwatora i ustawienia --------------------------------------------------------------------
+# --- 6. folder Maestro i ustawienia --------------------------------------------------------------------
 
-etap 6 "Folder obserwatora, umowa i ustawienia"
-sudo -u obserwator mkdir -p "$OBS_DIR" "$NOTATKI" "$ARCHIWUM" "$ARCHIWUM_NOTATEK" "$OBS_HOME/.claude"
-# Klucze usług od człowieka (umowa obserwatora, „Panele usług”): folder tylko konta obserwator.
-sudo -u obserwator mkdir -p "$OBS_DIR/klucze"
-sudo -u obserwator chmod 0700 "$OBS_DIR/klucze"
+etap 6 "Folder Maestro, umowa i ustawienia"
+sudo -u maestro mkdir -p "$OBS_DIR" "$NOTATKI" "$ARCHIWUM" "$ARCHIWUM_NOTATEK" "$OBS_HOME/.claude"
+# Klucze usług od człowieka (umowa Maestro, „Panele usług”): folder tylko konta maestro.
+sudo -u maestro mkdir -p "$OBS_DIR/klucze"
+sudo -u maestro chmod 0700 "$OBS_DIR/klucze"
 
-# przejscie_plikow_obserwatora: dawne pliki Maestro w folderze konta (do v1.0.17): umowa CLAUDE.md i narzędzia
-# narzedzia/wyslij.sh i narzedzia/porzadki-notatek.sh, gdy są, konto obserwator przenosi do nazw
-# <plik>.przed-instalatorem-$CZAS, bo umowa i narzędzia są w plikach roota $LIB/obserwator, a CLAUDE.md w folderze
+# przejscie_plikow_maestro: dawne pliki Maestro w folderze konta (do v1.0.17): umowa CLAUDE.md i narzędzia
+# narzedzia/wyslij.sh i narzedzia/porzadki-notatek.sh, gdy są, konto maestro przenosi do nazw
+# <plik>.przed-instalatorem-$CZAS, bo umowa i narzędzia są w plikach roota $LIB/maestro, a CLAUDE.md w folderze
 # sesji byłby drugą umową. Notatki, archiwum, archiwum notatek i klucze zostają nietknięte.
-przejscie_plikow_obserwatora() {
+przejscie_plikow_maestro() {
   local plik
   for plik in CLAUDE.md narzedzia/wyslij.sh narzedzia/porzadki-notatek.sh; do
-    if sudo -u obserwator test -e "$OBS_DIR/$plik" || sudo -u obserwator test -L "$OBS_DIR/$plik"; then
-      sudo -u obserwator mv -- "$OBS_DIR/$plik" "$OBS_DIR/$plik.przed-instalatorem-$CZAS" \
-        || przerwij "Konto obserwator nie może przenieść $OBS_DIR/$plik do kopii."
-      gotowe "dawny plik Maestro $OBS_DIR/$plik przeniesiony do $OBS_DIR/$plik.przed-instalatorem-$CZAS (jest w $LIB/obserwator)"
+    if sudo -u maestro test -e "$OBS_DIR/$plik" || sudo -u maestro test -L "$OBS_DIR/$plik"; then
+      sudo -u maestro mv -- "$OBS_DIR/$plik" "$OBS_DIR/$plik.przed-instalatorem-$CZAS" \
+        || przerwij "Konto maestro nie może przenieść $OBS_DIR/$plik do kopii."
+      gotowe "dawny plik Maestro $OBS_DIR/$plik przeniesiony do $OBS_DIR/$plik.przed-instalatorem-$CZAS (jest w $LIB/maestro)"
     fi
   done
 }
 
-# przejscie_skilli_obserwatora: tryb użytkownika. Konto obserwator przenosi każdy osobisty skill Maestro
-# z SKILLE_OBSERWATORA z ~/.claude/skills do $OBS_DIR/skille-przed-instalatorem-$CZAS/: skill porzadki-notatek jest
+# przejscie_skilli_maestro: tryb użytkownika. Konto maestro przenosi każdy osobisty skill Maestro
+# z SKILLE_MAESTRO z ~/.claude/skills do $OBS_DIR/skille-przed-instalatorem-$CZAS/: skill porzadki-notatek jest
 # w $ZARZADZANE, a skille autora u użytkownika nie ma; kopia w folderze skilli dalej byłaby skillem. Przeniesienie
 # ustawia ZMIANA_SKILLA=1 (restart sesji w etapie 7). Inne skille zostają.
-przejscie_skilli_obserwatora() {
+przejscie_skilli_maestro() {
   local skill kopia="$OBS_DIR/skille-przed-instalatorem-$CZAS" przeniesione=0
-  for skill in "${SKILLE_OBSERWATORA[@]}"; do
-    if sudo -u obserwator test -e "$OBS_SKILLE/$skill" || sudo -u obserwator test -L "$OBS_SKILLE/$skill"; then
+  for skill in "${SKILLE_MAESTRO[@]}"; do
+    if sudo -u maestro test -e "$OBS_SKILLE/$skill" || sudo -u maestro test -L "$OBS_SKILLE/$skill"; then
       if [ "$przeniesione" = 0 ]; then
-        sudo -u obserwator mkdir -p -- "$kopia"
+        sudo -u maestro mkdir -p -- "$kopia"
       fi
-      sudo -u obserwator mv -- "$OBS_SKILLE/$skill" "$kopia/$skill" \
-        || przerwij "Konto obserwator nie może przenieść skilla $OBS_SKILLE/$skill do $kopia."
+      sudo -u maestro mv -- "$OBS_SKILLE/$skill" "$kopia/$skill" \
+        || przerwij "Konto maestro nie może przenieść skilla $OBS_SKILLE/$skill do $kopia."
       przeniesione=1
       ZMIANA_SKILLA=1
       gotowe "osobisty skill Maestro $skill przeniesiony z $OBS_SKILLE do $kopia"
@@ -884,40 +896,40 @@ przejscie_skilli_obserwatora() {
   done
 }
 
-przejscie_plikow_obserwatora
-gotowe "umowa i narzędzia Maestro w plikach roota $LIB/obserwator"
+przejscie_plikow_maestro
+gotowe "umowa i narzędzia Maestro w plikach roota $LIB/maestro"
 
-# Skille obserwatora w trybie autora (osobiste skille Claude Code konta obserwator, SKILLE_OBSERWATORA): wzór zastępuje
-# inną treść, poprzednia wersja zostaje jako kopia zapasowa. Nowy albo zmieniony skill restartuje sesję obserwatora
+# Skille Maestro w trybie autora (osobiste skille Claude Code konta maestro, SKILLE_MAESTRO): wzór zastępuje
+# inną treść, poprzednia wersja zostaje jako kopia zapasowa. Nowy albo zmieniony skill restartuje sesję Maestro
 # w etapie 7, bo działająca sesja Claude Code nie widzi folderu skilli, którego nie było przy jej starcie. W trybie
-# użytkownika osobiste skille Maestro wychodzą z folderu skilli (przejscie_skilli_obserwatora).
+# użytkownika osobiste skille Maestro wychodzą z folderu skilli (przejscie_skilli_maestro).
 ZMIANA_SKILLA=0
 if [ "$TRYB" = autor ]; then
-  for skill in "${SKILLE_OBSERWATORA[@]}"; do
-    sudo -u obserwator mkdir -p "$OBS_SKILLE/$skill"
+  for skill in "${SKILLE_MAESTRO[@]}"; do
+    sudo -u maestro mkdir -p "$OBS_SKILLE/$skill"
   done
-  for skill in "${SKILLE_OBSERWATORA[@]}"; do
-    if sudo -u obserwator test -f "$OBS_SKILLE/$skill/SKILL.md"; then
-      if sudo -u obserwator cmp -s - "$OBS_SKILLE/$skill/SKILL.md" \
-        < "$POBRANE/obserwator/skills/$skill/SKILL.md"; then
-        gotowe "skill obserwatora $skill równy wzorowi"
+  for skill in "${SKILLE_MAESTRO[@]}"; do
+    if sudo -u maestro test -f "$OBS_SKILLE/$skill/SKILL.md"; then
+      if sudo -u maestro cmp -s - "$OBS_SKILLE/$skill/SKILL.md" \
+        < "$POBRANE/maestro/skills/$skill/SKILL.md"; then
+        gotowe "skill Maestro $skill równy wzorowi"
       else
         KOPIA="$OBS_SKILLE/$skill/SKILL.md.przed-instalatorem-$(date +%Y%m%d-%H%M%S)"
-        sudo -u obserwator cp "$OBS_SKILLE/$skill/SKILL.md" "$KOPIA"
-        sudo -u obserwator tee "$OBS_SKILLE/$skill/SKILL.md" \
-          < "$POBRANE/obserwator/skills/$skill/SKILL.md" > /dev/null
+        sudo -u maestro cp "$OBS_SKILLE/$skill/SKILL.md" "$KOPIA"
+        sudo -u maestro tee "$OBS_SKILLE/$skill/SKILL.md" \
+          < "$POBRANE/maestro/skills/$skill/SKILL.md" > /dev/null
         ZMIANA_SKILLA=1
-        gotowe "skill obserwatora $skill zastąpiony wzorem; poprzednia wersja w $KOPIA"
+        gotowe "skill Maestro $skill zastąpiony wzorem; poprzednia wersja w $KOPIA"
       fi
     else
-      sudo -u obserwator tee "$OBS_SKILLE/$skill/SKILL.md" \
-        < "$POBRANE/obserwator/skills/$skill/SKILL.md" > /dev/null
+      sudo -u maestro tee "$OBS_SKILLE/$skill/SKILL.md" \
+        < "$POBRANE/maestro/skills/$skill/SKILL.md" > /dev/null
       ZMIANA_SKILLA=1
-      gotowe "skill obserwatora $skill zapisany"
+      gotowe "skill Maestro $skill zapisany"
     fi
   done
 else
-  przejscie_skilli_obserwatora
+  przejscie_skilli_maestro
 fi
 
 # Folder serwera i projektów do odczytu, w trybie autora także laboratorium, a w trybie użytkownika zestaw Factory
@@ -926,14 +938,14 @@ fi
 # $SERWER/zaufane z v1.0.4, każdy folder konta fabryka spoza $foldery w additionalDirectories (w trybie użytkownika
 # także laboratorium), każda reguła allow z folderem konta fabryka i w trybie użytkownika reguła deny laboratorium.
 # Zapis narzędziami plikowymi także w archiwum notatek, bez pytania (umowa, „Pamięć”). Dwa haki uruchamiają
-# sprawdzenie notatek z $LIB/obserwator/narzedzia bez duplikatu: SessionStart przy każdym starcie sesji (także
+# sprawdzenie notatek z $LIB/maestro/narzedzia bez duplikatu: SessionStart przy każdym starcie sesji (także
 # wznowieniu i po kompaktowaniu) i UserPromptSubmit z --co-miesiac raz na miesiąc kalendarzowy; polecenia z dawną
-# ścieżką narzędzia w folderze obserwatora znikają, a inne haki zostają.
+# ścieżką narzędzia w folderze Maestro znikają, a inne haki zostają.
 ARGI_USTAWIEN=(--arg notatki "$NOTATKI" --arg serwer "$SERWER" --arg skrzynka "$SKRZYNKA" --arg zaufane "$SERWER/zaufane"
   --arg lab "$LAB_DIR" --arg projekty "$FAB_HOME/projekty" --arg dom "$FAB_HOME"
   --arg zestaw "$ZESTAW" --arg tryb "$TRYB"
-  --arg porzadki "$LIB/obserwator/narzedzia/porzadki-notatek.sh"
-  --arg porzadki_miesiac "$LIB/obserwator/narzedzia/porzadki-notatek.sh --co-miesiac"
+  --arg porzadki "$LIB/maestro/narzedzia/porzadki-notatek.sh"
+  --arg porzadki_miesiac "$LIB/maestro/narzedzia/porzadki-notatek.sh --co-miesiac"
   --arg stary_porzadki "$OBS_DIR/narzedzia/porzadki-notatek.sh"
   --arg stary_porzadki_miesiac "$OBS_DIR/narzedzia/porzadki-notatek.sh --co-miesiac"
   --arg archiwum_notatek "$ARCHIWUM_NOTATEK")
@@ -980,59 +992,59 @@ FILTR_USTAWIEN='(if $tryb == "autor" then [$serwer, $lab, $projekty] else [$serw
           else . end) as $s
       | if any($s[]?.hooks[]?; .type == "command" and .command == $porzadki_miesiac) then $s
         else $s + [{hooks: [{type: "command", command: $porzadki_miesiac}]}] end)'
-if ! sudo -u obserwator test -s "$OBS_SETTINGS"; then
-  printf '{}\n' | sudo -u obserwator tee "$OBS_SETTINGS" > /dev/null
+if ! sudo -u maestro test -s "$OBS_SETTINGS"; then
+  printf '{}\n' | sudo -u maestro tee "$OBS_SETTINGS" > /dev/null
 fi
-if sudo -u obserwator jq -e "${ARGI_USTAWIEN[@]}" "$WARUNEK_USTAWIEN" "$OBS_SETTINGS" > /dev/null 2>&1; then
-  gotowe "ustawienia Claude Code obserwatora już są"
+if sudo -u maestro jq -e "${ARGI_USTAWIEN[@]}" "$WARUNEK_USTAWIEN" "$OBS_SETTINGS" > /dev/null 2>&1; then
+  gotowe "ustawienia Claude Code Maestro już są"
 else
-  if ! sudo -u obserwator jq "${ARGI_USTAWIEN[@]}" "$FILTR_USTAWIEN" "$OBS_SETTINGS" > "$TMP/settings.json"; then
-    przerwij "Ustawienia Claude Code obserwatora (.claude/settings.json) nie są poprawnym JSON-em."
+  if ! sudo -u maestro jq "${ARGI_USTAWIEN[@]}" "$FILTR_USTAWIEN" "$OBS_SETTINGS" > "$TMP/settings.json"; then
+    przerwij "Ustawienia Claude Code Maestro (.claude/settings.json) nie są poprawnym JSON-em."
   fi
-  sudo -u obserwator tee "$OBS_SETTINGS" < "$TMP/settings.json" > /dev/null
-  gotowe "ustawienia Claude Code obserwatora scalone (inne klucze bez zmian)"
+  sudo -u maestro tee "$OBS_SETTINGS" < "$TMP/settings.json" > /dev/null
+  gotowe "ustawienia Claude Code Maestro scalone (inne klucze bez zmian)"
 fi
 
-# Zaufanie folderu obserwatora i koniec wprowadzenia: bez tego sesja bez terminala się zatrzyma.
+# Zaufanie folderu Maestro i koniec wprowadzenia: bez tego sesja bez terminala się zatrzyma.
 WARUNEK_STANU='.hasCompletedOnboarding == true and .projects[$folder].hasTrustDialogAccepted == true'
 FILTR_STANU='.hasCompletedOnboarding = true | .projects[$folder].hasTrustDialogAccepted = true'
-if ! sudo -u obserwator test -s "$OBS_STAN"; then
-  printf '{}\n' | sudo -u obserwator tee "$OBS_STAN" > /dev/null
+if ! sudo -u maestro test -s "$OBS_STAN"; then
+  printf '{}\n' | sudo -u maestro tee "$OBS_STAN" > /dev/null
 fi
-if sudo -u obserwator jq -e --arg folder "$OBS_DIR" "$WARUNEK_STANU" "$OBS_STAN" > /dev/null 2>&1; then
-  gotowe "zaufanie folderu obserwatora już jest"
+if sudo -u maestro jq -e --arg folder "$OBS_DIR" "$WARUNEK_STANU" "$OBS_STAN" > /dev/null 2>&1; then
+  gotowe "zaufanie folderu Maestro już jest"
 else
-  if ! sudo -u obserwator jq --arg folder "$OBS_DIR" "$FILTR_STANU" "$OBS_STAN" > "$TMP/claude.json"; then
-    przerwij "Stan Claude Code obserwatora (.claude.json) nie jest poprawnym JSON-em."
+  if ! sudo -u maestro jq --arg folder "$OBS_DIR" "$FILTR_STANU" "$OBS_STAN" > "$TMP/claude.json"; then
+    przerwij "Stan Claude Code Maestro (.claude.json) nie jest poprawnym JSON-em."
   fi
-  sudo -u obserwator tee "$OBS_STAN" < "$TMP/claude.json" > /dev/null
-  gotowe "zaufanie folderu obserwatora zapisane (inne klucze bez zmian)"
+  sudo -u maestro tee "$OBS_STAN" < "$TMP/claude.json" > /dev/null
+  gotowe "zaufanie folderu Maestro zapisane (inne klucze bez zmian)"
 fi
 
-# --- 7. usługa obserwatora ---------------------------------------------------------------------------------
+# --- 7. usługa Maestro ---------------------------------------------------------------------------------
 
-etap 7 "Usługa sesji obserwatora"
+etap 7 "Usługa sesji Maestro"
 ZMIANA_USLUGI=0
-if zainstaluj_plik "$POBRANE/obserwator.service" "$JEDNOSTKI/obserwator.service" 0644; then
+if zainstaluj_plik "$POBRANE/maestro.service" "$JEDNOSTKI/maestro.service" 0644; then
   ZMIANA_USLUGI=1
   systemctl daemon-reload
 fi
-systemctl enable obserwator.service > /dev/null 2>&1 || przerwij "Nie mogę włączyć usługi obserwator.service."
+systemctl enable maestro.service > /dev/null 2>&1 || przerwij "Nie mogę włączyć usługi maestro.service."
 if { [ "$ZMIANA_USLUGI" -eq 1 ] || [ "$ZMIANA_SKILLA" -eq 1 ] || [ "$ZMIANA_SERWERA" -eq 1 ]; } \
-  && systemctl is-active --quiet obserwator.service; then
-  systemctl restart obserwator.service || napisz "  Uwaga: usługa obserwator.service nie wystartowała; szczegóły na liście sprawdzeń."
+  && systemctl is-active --quiet maestro.service; then
+  systemctl restart maestro.service || napisz "  Uwaga: usługa maestro.service nie wystartowała; szczegóły na liście sprawdzeń."
 else
-  systemctl start obserwator.service || napisz "  Uwaga: usługa obserwator.service nie wystartowała; szczegóły na liście sprawdzeń."
+  systemctl start maestro.service || napisz "  Uwaga: usługa maestro.service nie wystartowała; szczegóły na liście sprawdzeń."
 fi
 
-ekran_obserwatora() {
-  sudo -u obserwator tmux capture-pane -p -t obserwator 2> /dev/null || true
+ekran_maestro() {
+  sudo -u maestro tmux capture-pane -p -t maestro 2> /dev/null || true
 }
 
 PYTANIE=0
 for _ in $(seq 1 20); do
   sleep 1
-  case "$(ekran_obserwatora)" in
+  case "$(ekran_maestro)" in
     *"(y/n)"*)
       PYTANIE=1
       break
@@ -1040,39 +1052,39 @@ for _ in $(seq 1 20); do
   esac
 done
 if [ "$PYTANIE" -eq 1 ]; then
-  napisz "  Sesja obserwatora czeka na jednorazową odpowiedź. Ekran sesji:"
-  ekran_obserwatora | tail -n 8 | tee -a "$LOG"
+  napisz "  Sesja Maestro czeka na jednorazową odpowiedź. Ekran sesji:"
+  ekran_maestro | tail -n 8 | tee -a "$LOG"
   napisz "  Po Enterze instalator otworzy ekran sesji poleceniem:"
-  napisz "    sudo -u obserwator tmux attach -t obserwator"
+  napisz "    sudo -u maestro tmux attach -t maestro"
   napisz "  Wpisz y i Enter, potem naciśnij Ctrl-b, a następnie d, żeby wrócić do instalatora."
   read -r _ || true
-  sudo -u obserwator tmux attach -t obserwator || true
+  sudo -u maestro tmux attach -t maestro || true
 fi
-if pgrep -u obserwator -f remote-control > /dev/null; then
-  gotowe "sesja obserwatora działa z Remote Control"
+if pgrep -u maestro -f remote-control > /dev/null; then
+  gotowe "sesja Maestro działa z Remote Control"
 else
   napisz "  Uwaga: brak procesu remote-control. Ekran sesji:"
-  ekran_obserwatora | tail -n 8 | tee -a "$LOG"
-  napisz "  Sprawdź: sudo -u obserwator tmux attach -t obserwator (wyjście: Ctrl-b, potem d)."
+  ekran_maestro | tail -n 8 | tee -a "$LOG"
+  napisz "  Sprawdź: sudo -u maestro tmux attach -t maestro (wyjście: Ctrl-b, potem d)."
 fi
 
 # --- 8. retencja archiwum ----------------------------------------------------------------------------------
 
-etap 8 "Codzienna retencja archiwum obserwatora (bez notatek i archiwum notatek)"
+etap 8 "Codzienna retencja archiwum Maestro (bez notatek i archiwum notatek)"
 ZMIANA_RETENCJI=0
-if zainstaluj_plik "$POBRANE/fabryka-retencja-obserwatora.service" \
-  "$JEDNOSTKI/fabryka-retencja-obserwatora.service" 0644; then
+if zainstaluj_plik "$POBRANE/maestro-retencja.service" \
+  "$JEDNOSTKI/maestro-retencja.service" 0644; then
   ZMIANA_RETENCJI=1
 fi
-if zainstaluj_plik "$POBRANE/fabryka-retencja-obserwatora.timer" \
-  "$JEDNOSTKI/fabryka-retencja-obserwatora.timer" 0644; then
+if zainstaluj_plik "$POBRANE/maestro-retencja.timer" \
+  "$JEDNOSTKI/maestro-retencja.timer" 0644; then
   ZMIANA_RETENCJI=1
 fi
 if [ "$ZMIANA_RETENCJI" -eq 1 ]; then
   systemctl daemon-reload
 fi
-systemctl enable --now fabryka-retencja-obserwatora.timer > /dev/null 2>&1 \
-  || przerwij "Nie mogę włączyć zadania fabryka-retencja-obserwatora.timer."
+systemctl enable --now maestro-retencja.timer > /dev/null 2>&1 \
+  || przerwij "Nie mogę włączyć zadania maestro-retencja.timer."
 gotowe "zadanie retencji włączone (pliki archiwum starsze niż 365 dni; notatki i archiwum notatek zostają)"
 
 # --- 9. pliki Factory ---------------------------------------------------------------------------------------
@@ -1203,7 +1215,7 @@ zestaw_fabryki() {
   [ ! -e "$TMP/zestaw/skills/porzadki-notatek" ] || przerwij "Zestaw Factory ma skill porzadki-notatek, który jest skillem Maestro."
   mkdir -p -- "$TMP/zarzadzane/porzadki-notatek"
   cp -R -- "$TMP/zestaw/skills/." "$TMP/zarzadzane/"
-  cp -- "$POBRANE/obserwator/skills/porzadki-notatek/SKILL.md" "$TMP/zarzadzane/porzadki-notatek/SKILL.md"
+  cp -- "$POBRANE/maestro/skills/porzadki-notatek/SKILL.md" "$TMP/zarzadzane/porzadki-notatek/SKILL.md"
   folder_systemu "${ZARZADZANE%/.claude/skills}" root:root 0755
   drzewo_roota "$TMP/zestaw" "$ZESTAW" zestaw
   drzewo_roota "$TMP/zarzadzane" "$ZARZADZANE" zarzadzane
@@ -1269,17 +1281,17 @@ else
     KLON_BYL=0
   fi
   zestaw_fabryki
-  # Etap 7 startuje sesję obserwatora przed założeniem $ZARZADZANE (ze skillem porzadki-notatek), a działająca sesja
+  # Etap 7 startuje sesję Maestro przed założeniem $ZARZADZANE (ze skillem porzadki-notatek), a działająca sesja
   # nie widzi folderu skilli, którego nie było przy jej starcie: zmiana drzewa $ZARZADZANE restartuje sesję.
-  if [ "$DRZEWO_ZMIENIONE" -eq 1 ] && systemctl is-active --quiet obserwator.service; then
-    systemctl restart obserwator.service || napisz "  Uwaga: usługa obserwator.service nie wystartowała; szczegóły na liście sprawdzeń."
+  if [ "$DRZEWO_ZMIENIONE" -eq 1 ] && systemctl is-active --quiet maestro.service; then
+    systemctl restart maestro.service || napisz "  Uwaga: usługa maestro.service nie wystartowała; szczegóły na liście sprawdzeń."
   fi
   przejscie_skilli_fabryki
 fi
 ustawienia_fabryki
 tozsamosc_gita
 
-# Folder projektów aplikacji konta fabryka (obserwator czyta go przez grupę fabryka); zakłada go konto fabryka.
+# Folder projektów aplikacji konta fabryka (maestro czyta go przez grupę fabryka); zakłada go konto fabryka.
 sudo -u fabryka mkdir -p "$FAB_HOME/projekty"
 gotowe "folder $FAB_HOME/projekty jest"
 
@@ -1302,25 +1314,25 @@ sprawdz() {
   fi
 }
 
-fabryka_nie_widzi_obserwatora() {
+fabryka_nie_widzi_maestro() {
   ! sudo -u fabryka ls "$OBS_HOME" && ! sudo -u fabryka test -w "$OBS_HOME"
 }
 
-# obserwator_czyta_laboratorium: obserwator czyta CLAUDE.md folderu Factory trybu (klon laboratorium w trybie autora,
+# maestro_czyta_laboratorium: maestro czyta CLAUDE.md folderu Factory trybu (klon laboratorium w trybie autora,
 # zestaw w trybie użytkownika) i folder projektów.
-obserwator_czyta_laboratorium() {
-  sudo -u obserwator cat "$FOLDER_FABRYKI/CLAUDE.md" > /dev/null && sudo -u obserwator ls "$FAB_HOME/projekty" > /dev/null
+maestro_czyta_laboratorium() {
+  sudo -u maestro cat "$FOLDER_FABRYKI/CLAUDE.md" > /dev/null && sudo -u maestro ls "$FAB_HOME/projekty" > /dev/null
 }
 
-regula_sudo_obserwatora() {
+regula_sudo_maestro() {
   local wynik reguly
-  wynik=$(sudo -l -U obserwator 2>&1) || return 1
+  wynik=$(sudo -l -U maestro 2>&1) || return 1
   reguly=$(printf '%s\n' "$wynik" | grep -E '^[[:space:]]+\(' | sed 's/^[[:space:]]*//') || return 1
   [ "$reguly" = "(fabryka) NOPASSWD: $LIB/start-fabryki.sh" ]
 }
 
-obserwator_bez_pelnego_sudo() {
-  ! sudo -u obserwator sudo -n true
+maestro_bez_pelnego_sudo() {
+  ! sudo -u maestro sudo -n true
 }
 
 fabryka_bez_sudo() {
@@ -1334,17 +1346,17 @@ fabryka_bez_sudo() {
   ! printf '%s\n' "$wynik" | grep -qE '^[[:space:]]+\('
 }
 
-remote_control_obserwatora() {
-  pgrep -u obserwator -f remote-control > /dev/null || return 1
+remote_control_maestro() {
+  pgrep -u maestro -f remote-control > /dev/null || return 1
   # Proces startuje z --remote-control w wierszu polecenia, zanim sesja odpowie na pytanie (y/n).
-  case "$(ekran_obserwatora)" in
+  case "$(ekran_maestro)" in
     *"(y/n)"*) return 1 ;;
   esac
   return 0
 }
 
 grupy_kont() {
-  ! w_grupie fabryka sudo && ! w_grupie fabryka docker && w_grupie obserwator fabryka
+  ! w_grupie fabryka sudo && ! w_grupie fabryka docker && w_grupie maestro fabryka
 }
 
 docker_bez_roota() {
@@ -1471,64 +1483,64 @@ bez_zaufanych() {
 }
 
 # plik_serwera <plik w $LIB> <wzór>: dodatni sygnał; plik (nie dowiązanie) należy do root:root bez zapisu dla grupy
-# i innych, ma treść wzoru, a konto obserwator go czyta.
+# i innych, ma treść wzoru, a konto maestro go czyta.
 plik_serwera() {
   local prawa
   [ -f "$1" ] && [ ! -L "$1" ] || return 1
   prawa=$(stat -c '%u:%g %a' -- "$1") || return 1
   [ "${prawa%% *}" = "0:0" ] || return 1
   [ $((8#${prawa#* } & 8#022)) -eq 0 ] || return 1
-  cmp -s -- "$2" "$1" && sudo -u obserwator test -r "$1"
+  cmp -s -- "$2" "$1" && sudo -u maestro test -r "$1"
 }
 
-# umowa_rowna_wzorowi: umowa Maestro w $LIB/obserwator/CLAUDE.md to wzór trybu (w trybie autora z dodatkiem autora).
+# umowa_rowna_wzorowi: umowa Maestro w $LIB/maestro/CLAUDE.md to wzór trybu (w trybie autora z dodatkiem autora).
 umowa_rowna_wzorowi() {
-  plik_serwera "$LIB/obserwator/CLAUDE.md" "$WZOR_SERWERA/obserwator/CLAUDE.md"
+  plik_serwera "$LIB/maestro/CLAUDE.md" "$WZOR_SERWERA/maestro/CLAUDE.md"
 }
 
 wyslij_rowny_wzorowi() {
-  plik_serwera "$LIB/obserwator/narzedzia/wyslij.sh" "$POBRANE/obserwator/narzedzia/wyslij.sh" \
-    && sudo -u obserwator test -x "$LIB/obserwator/narzedzia/wyslij.sh"
+  plik_serwera "$LIB/maestro/narzedzia/wyslij.sh" "$POBRANE/maestro/narzedzia/wyslij.sh" \
+    && sudo -u maestro test -x "$LIB/maestro/narzedzia/wyslij.sh"
 }
 
 porzadki_notatek_rowne_wzorowi() {
-  plik_serwera "$LIB/obserwator/narzedzia/porzadki-notatek.sh" "$POBRANE/obserwator/narzedzia/porzadki-notatek.sh" \
-    && sudo -u obserwator test -x "$LIB/obserwator/narzedzia/porzadki-notatek.sh"
+  plik_serwera "$LIB/maestro/narzedzia/porzadki-notatek.sh" "$POBRANE/maestro/narzedzia/porzadki-notatek.sh" \
+    && sudo -u maestro test -x "$LIB/maestro/narzedzia/porzadki-notatek.sh"
 }
 
-# obserwator_nie_zmienia_umowy: dodatni sygnał czterech warunków. Root kładzie w $LIB/obserwator plik próbny; konto
-# obserwator nie dopisuje do umowy ani do pliku próbnego, nie usuwa pliku próbnego i nie tworzy nowego pliku obok
+# maestro_nie_zmienia_umowy: dodatni sygnał czterech warunków. Root kładzie w $LIB/maestro plik próbny; konto
+# maestro nie dopisuje do umowy ani do pliku próbnego, nie usuwa pliku próbnego i nie tworzy nowego pliku obok
 # umowy. Kod 0 tylko, gdy zachodzą wszystkie cztery; próby sprząta root.
-obserwator_nie_zmienia_umowy() {
-  local folder="$LIB/obserwator" wynik=0
-  local probny="$LIB/obserwator/.proba-roota-$$" nowy="$LIB/obserwator/.proba-obserwatora-$$"
+maestro_nie_zmienia_umowy() {
+  local folder="$LIB/maestro" wynik=0
+  local probny="$LIB/maestro/.proba-roota-$$" nowy="$LIB/maestro/.proba-maestro-$$"
   [ -f "$folder/CLAUDE.md" ] || return 1
   printf 'proba\n' > "$probny" || return 1
-  if sudo -u obserwator tee -a "$folder/CLAUDE.md" < /dev/null > /dev/null 2>&1; then
+  if sudo -u maestro tee -a "$folder/CLAUDE.md" < /dev/null > /dev/null 2>&1; then
     wynik=1
   fi
-  if sudo -u obserwator tee -a "$probny" < /dev/null > /dev/null 2>&1; then
+  if sudo -u maestro tee -a "$probny" < /dev/null > /dev/null 2>&1; then
     wynik=1
   fi
-  sudo -u obserwator rm -f "$probny" 2> /dev/null || true
+  sudo -u maestro rm -f "$probny" 2> /dev/null || true
   if [ ! -e "$probny" ]; then
     wynik=1
   fi
-  if sudo -u obserwator touch "$nowy" 2> /dev/null; then
+  if sudo -u maestro touch "$nowy" 2> /dev/null; then
     wynik=1
   fi
   rm -f -- "$probny" "$nowy"
   return "$wynik"
 }
 
-# obserwator_bez_skilli_autora: tryb użytkownika, dodatni sygnał; konto obserwator czyta swój folder skilli (albo
+# maestro_bez_skilli_autora: tryb użytkownika, dodatni sygnał; konto maestro czyta swój folder skilli (albo
 # folder domowy, gdy folderu skilli nie ma), a w nim nie ma żadnego skilla z SKILLE_AUTORA.
-obserwator_bez_skilli_autora() {
+maestro_bez_skilli_autora() {
   local lista skill
-  if sudo -u obserwator test -d "$OBS_SKILLE"; then
-    lista=$(sudo -u obserwator find "$OBS_SKILLE" -mindepth 1 -maxdepth 1 -printf '%f\n') || return 1
+  if sudo -u maestro test -d "$OBS_SKILLE"; then
+    lista=$(sudo -u maestro find "$OBS_SKILLE" -mindepth 1 -maxdepth 1 -printf '%f\n') || return 1
   else
-    sudo -u obserwator test -d "$OBS_HOME" || return 1
+    sudo -u maestro test -d "$OBS_HOME" || return 1
     lista=""
   fi
   for skill in "${SKILLE_AUTORA[@]}"; do
@@ -1538,24 +1550,24 @@ obserwator_bez_skilli_autora() {
   done
 }
 
-# skill_obserwatora_rowny_wzorowi <nazwa>: skill obserwatora z SKILLE_OBSERWATORA ma treść pobranego wzoru.
-skill_obserwatora_rowny_wzorowi() {
-  sudo -u obserwator cmp -s - "$OBS_SKILLE/$1/SKILL.md" \
-    < "$POBRANE/obserwator/skills/$1/SKILL.md"
+# skill_maestro_rowny_wzorowi <nazwa>: skill Maestro z SKILLE_MAESTRO ma treść pobranego wzoru.
+skill_maestro_rowny_wzorowi() {
+  sudo -u maestro cmp -s - "$OBS_SKILLE/$1/SKILL.md" \
+    < "$POBRANE/maestro/skills/$1/SKILL.md"
 }
 
-ustawienia_obserwatora() {
-  sudo -u obserwator jq -e "${ARGI_USTAWIEN[@]}" "$WARUNEK_USTAWIEN" "$OBS_SETTINGS" > /dev/null \
-    && sudo -u obserwator jq -e --arg folder "$OBS_DIR" "$WARUNEK_STANU" "$OBS_STAN" > /dev/null
+ustawienia_maestro() {
+  sudo -u maestro jq -e "${ARGI_USTAWIEN[@]}" "$WARUNEK_USTAWIEN" "$OBS_SETTINGS" > /dev/null \
+    && sudo -u maestro jq -e --arg folder "$OBS_DIR" "$WARUNEK_STANU" "$OBS_STAN" > /dev/null
 }
 
-# tylko_obserwator_pisze <folder>: dodatni sygnał czterech warunków. Obserwator tworzy plik próbny, fabryka
-# nie tworzy nowego pliku, nie dopisuje do próbnego i nie usuwa go, obserwator go usuwa. Kod 0 tylko, gdy
+# tylko_maestro_pisze <folder>: dodatni sygnał czterech warunków. Maestro tworzy plik próbny, fabryka
+# nie tworzy nowego pliku, nie dopisuje do próbnego i nie usuwa go, maestro go usuwa. Kod 0 tylko, gdy
 # zachodzą wszystkie cztery; plik, który fabryka wbrew oczekiwaniu zapisała, sprząta root.
-tylko_obserwator_pisze() {
+tylko_maestro_pisze() {
   local folder="$1" wynik=0
-  local probny="$folder/.proba-obserwatora-$$" nowy="$folder/.proba-fabryki-$$"
-  if ! sudo -u obserwator touch "$probny" 2> /dev/null; then
+  local probny="$folder/.proba-maestro-$$" nowy="$folder/.proba-fabryki-$$"
+  if ! sudo -u maestro touch "$probny" 2> /dev/null; then
     return 1
   fi
   if sudo -u fabryka touch "$nowy" 2> /dev/null; then
@@ -1566,38 +1578,38 @@ tylko_obserwator_pisze() {
     wynik=1
   fi
   sudo -u fabryka rm -f "$probny" 2> /dev/null || true
-  if ! sudo -u obserwator test -e "$probny"; then
+  if ! sudo -u maestro test -e "$probny"; then
     wynik=1
   fi
-  if ! sudo -u obserwator rm "$probny" 2> /dev/null; then
+  if ! sudo -u maestro rm "$probny" 2> /dev/null; then
     wynik=1
     rm -f "$probny"
   fi
   return "$wynik"
 }
 
-# klucze_obserwatora: dodatni sygnał; folder kluczy obserwatora ma tryb 0700 (czyta go konto obserwator), a konto
+# klucze_maestro: dodatni sygnał; folder kluczy Maestro ma tryb 0700 (czyta go konto maestro), a konto
 # fabryka go nie czyta. Root nie otwiera ścieżek pod /home.
-klucze_obserwatora() {
+klucze_maestro() {
   local tryb
-  tryb=$(sudo -u obserwator stat -c %a "$OBS_DIR/klucze") || return 1
+  tryb=$(sudo -u maestro stat -c %a "$OBS_DIR/klucze") || return 1
   [ "$tryb" = "700" ] || return 1
   ! sudo -u fabryka test -r "$OBS_DIR/klucze"
 }
 
-# obserwator_przekazuje_fabryce <folder>: dodatni sygnał czterech warunków. Folder ma właściciela obserwator:fabryka
-# i tryb 2770; obserwator tworzy plik próbny z umask 027 pod losową nazwą jednym otwarciem, które nie idzie za
+# maestro_przekazuje_fabryce <folder>: dodatni sygnał czterech warunków. Folder ma właściciela maestro:fabryka
+# i tryb 2770; maestro tworzy plik próbny z umask 027 pod losową nazwą jednym otwarciem, które nie idzie za
 # dowiązaniem (O_CREAT|O_EXCL|O_NOFOLLOW; nazwa nie stoi w argumentach procesu), fabryka go czyta i usuwa, a pliku
 # potem nie ma. Kod 0 tylko, gdy zachodzą wszystkie cztery; plik, który został po próbie, sprząta root.
-obserwator_przekazuje_fabryce() {
+maestro_przekazuje_fabryce() {
   local folder="$1" wynik=0 prawa probny
   local tworz='import os, secrets, sys
 p = os.path.join(sys.argv[1], ".proba-przekazania-" + secrets.token_hex(8))
 os.close(os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640))
 print(p)'
   prawa=$(stat -c '%U:%G %a' "$folder") || return 1
-  [ "$prawa" = "obserwator:fabryka 2770" ] || return 1
-  if ! probny=$( (umask 027; sudo -u obserwator python3 -I -c "$tworz" "$folder") 2> /dev/null); then
+  [ "$prawa" = "maestro:fabryka 2770" ] || return 1
+  if ! probny=$( (umask 027; sudo -u maestro python3 -I -c "$tworz" "$folder") 2> /dev/null); then
     return 1
   fi
   case "$probny" in
@@ -1617,11 +1629,11 @@ print(p)'
   return "$wynik"
 }
 
-# ocena_w_skrzynce <folder> <konto>: dodatni sygnał trzech warunków. Konto obserwator zapisuje w folderze plik próbny
+# ocena_w_skrzynce <folder> <konto>: dodatni sygnał trzech warunków. Konto maestro zapisuje w folderze plik próbny
 # pod losową nazwą jednym otwarciem, które nie idzie za dowiązaniem, tak jak plik oceny Maestro
 # (ocena-<change-id>.md, zapisany narzędziem Write); konto fabryka otwiera go bez podążania za dowiązaniem i widzi
 # zwykły plik z treścią próby, którego właścicielem jest <konto> (tak sprawdza ocenę ocena_problem w
-# scripts/przebieg_rozmowy.py laboratorium); obserwator go potem usuwa. Kod 0 tylko, gdy zachodzą wszystkie trzy;
+# scripts/przebieg_rozmowy.py laboratorium); maestro go potem usuwa. Kod 0 tylko, gdy zachodzą wszystkie trzy;
 # plik, który został po próbie, sprząta root.
 ocena_w_skrzynce() {
   local folder="$1" konto="$2" wynik=0 probny
@@ -1638,7 +1650,7 @@ dane = os.read(fd, 64)
 os.close(fd)
 wlasciciel = pwd.getpwnam(sys.argv[2]).pw_uid
 sys.exit(0 if stat.S_ISREG(info.st_mode) and info.st_uid == wlasciciel and dane == b"commit: proba\n" else 1)'
-  if ! probny=$(sudo -u obserwator python3 -I -c "$tworz" "$folder" 2> /dev/null); then
+  if ! probny=$(sudo -u maestro python3 -I -c "$tworz" "$folder" 2> /dev/null); then
     return 1
   fi
   case "$probny" in
@@ -1648,7 +1660,7 @@ sys.exit(0 if stat.S_ISREG(info.st_mode) and info.st_uid == wlasciciel and dane 
   if ! sudo -u fabryka python3 -I -c "$czytaj" "$probny" "$konto" 2> /dev/null; then
     wynik=1
   fi
-  if ! sudo -u obserwator rm -f "$probny" 2> /dev/null; then
+  if ! sudo -u maestro rm -f "$probny" 2> /dev/null; then
     wynik=1
   fi
   if [ -e "$probny" ] || [ -L "$probny" ]; then
@@ -1678,7 +1690,7 @@ mise_w_wersji_instalatora() {
 
 umask_kont() {
   local konto
-  for konto in fabryka obserwator; do
+  for konto in fabryka maestro; do
     case "$(getent passwd "$konto" | cut -d: -f5)" in
       *umask=022*) ;;
       *) return 1 ;;
@@ -1686,18 +1698,18 @@ umask_kont() {
   done
 }
 
-sprawdz "konto fabryka nie czyta i nie zmienia katalogu obserwatora" \
-  "tryb 0700 katalogu $OBS_HOME (ls -ld $OBS_HOME)" fabryka_nie_widzi_obserwatora
-sprawdz "obserwator czyta pliki Factory i projektów" \
-  "tryb 0750 katalogu $FAB_HOME, grupę fabryka obserwatora (id obserwator), plik $FOLDER_FABRYKI/CLAUDE.md i folder $FAB_HOME/projekty" \
-  obserwator_czyta_laboratorium
-sprawdz "jedyna reguła sudo obserwatora to skrypt startowy fabryki" \
-  "sudo -l -U obserwator i plik $SUDOERS_CEL" regula_sudo_obserwatora
-sprawdz "obserwator nie ma pełnego sudo" "sudo -l -U obserwator" obserwator_bez_pelnego_sudo
+sprawdz "konto fabryka nie czyta i nie zmienia katalogu Maestro" \
+  "tryb 0700 katalogu $OBS_HOME (ls -ld $OBS_HOME)" fabryka_nie_widzi_maestro
+sprawdz "Maestro czyta pliki Factory i projektów" \
+  "tryb 0750 katalogu $FAB_HOME, grupę fabryka Maestro (id maestro), plik $FOLDER_FABRYKI/CLAUDE.md i folder $FAB_HOME/projekty" \
+  maestro_czyta_laboratorium
+sprawdz "jedyna reguła sudo Maestro to skrypt startowy fabryki" \
+  "sudo -l -U maestro i plik $SUDOERS_CEL" regula_sudo_maestro
+sprawdz "Maestro nie ma pełnego sudo" "sudo -l -U maestro" maestro_bez_pelnego_sudo
 sprawdz "konto fabryka nie ma reguł sudo" "sudo -l -U fabryka i pliki w /etc/sudoers.d" fabryka_bez_sudo
-sprawdz "grupy: fabryka poza sudo i docker, obserwator w grupie fabryka" "id fabryka i id obserwator" grupy_kont
-sprawdz "Claude obserwatora zalogowany" "uruchom instalator ponownie i zaloguj konto" \
-  sudo -u obserwator "$OBS_CLAUDE" auth status
+sprawdz "grupy: fabryka poza sudo i docker, maestro w grupie fabryka" "id fabryka i id maestro" grupy_kont
+sprawdz "Claude Maestro zalogowany" "uruchom instalator ponownie i zaloguj konto" \
+  sudo -u maestro "$OBS_CLAUDE" auth status
 sprawdz "Claude fabryki zalogowany" "uruchom instalator ponownie i zaloguj konto" \
   sudo -u fabryka "$FAB_CLAUDE" auth status
 sprawdz "GitHub fabryki zalogowany" "sudo -u fabryka gh auth status" sudo -u fabryka gh auth status
@@ -1722,57 +1734,57 @@ else
     "ls -ld $ZESTAW i find $ZESTAW ! -user root" root_bez_zapisu_innych "$ZESTAW"
   sprawdz "skille Factory i ich foldery nadrzędne należą do roota bez zapisu dla grupy i innych" \
     "ls -ld $ZARZADZANE i find $ZARZADZANE ! -user root" root_bez_zapisu_innych "$ZARZADZANE"
-  for konto in fabryka obserwator; do
+  for konto in fabryka maestro; do
     sprawdz "konto $konto nie tworzy, nie zmienia i nie usuwa plików zestawu ani nie zmienia nazwy folderu skilla" \
       "właściciel root i tryby $ZESTAW i $ZARZADZANE (ls -ld)" konto_nie_zmienia_zestawu "$konto"
     sprawdz "konto $konto czyta zestaw Factory i skille Factory" \
       "tryby $ZESTAW i $ZARZADZANE (ls -ld)" konto_czyta_zestaw "$konto"
   done
-  sprawdz "w ~/.claude/skills obserwatora nie ma skilli autora (${SKILLE_AUTORA[*]})" \
-    "folder $OBS_SKILLE (sudo -u obserwator ls $OBS_SKILLE); uruchom instalator ponownie" obserwator_bez_skilli_autora
+  sprawdz "w ~/.claude/skills Maestro nie ma skilli autora (${SKILLE_AUTORA[*]})" \
+    "folder $OBS_SKILLE (sudo -u maestro ls $OBS_SKILLE); uruchom instalator ponownie" maestro_bez_skilli_autora
 fi
 sprawdz "hak startu sesji z $FOLDER_FABRYKI w ustawieniach Claude Code konta fabryka" "plik $FAB_SETTINGS" hak_fabryki
-sprawdz "umowa obserwatora równa wzorowi" "plik $LIB/obserwator/CLAUDE.md (ls -l)" \
+sprawdz "umowa Maestro równa wzorowi" "plik $LIB/maestro/CLAUDE.md (ls -l)" \
   umowa_rowna_wzorowi
-sprawdz "konto obserwator nie zmienia umowy" "właściciel root i tryby $LIB/obserwator (ls -ld)" \
-  obserwator_nie_zmienia_umowy
-sprawdz "narzędzie wysyłania obserwatora równe wzorowi i wykonywalne" \
-  "plik $LIB/obserwator/narzedzia/wyslij.sh (ls -l)" wyslij_rowny_wzorowi
-sprawdz "narzędzie sprawdzenia notatek obserwatora równe wzorowi i wykonywalne" \
-  "plik $LIB/obserwator/narzedzia/porzadki-notatek.sh (ls -l)" porzadki_notatek_rowne_wzorowi
-sprawdz "folder archiwum notatek jest" "sudo -u obserwator ls -ld $ARCHIWUM_NOTATEK" \
-  sudo -u obserwator test -d "$ARCHIWUM_NOTATEK"
+sprawdz "konto maestro nie zmienia umowy" "właściciel root i tryby $LIB/maestro (ls -ld)" \
+  maestro_nie_zmienia_umowy
+sprawdz "narzędzie wysyłania Maestro równe wzorowi i wykonywalne" \
+  "plik $LIB/maestro/narzedzia/wyslij.sh (ls -l)" wyslij_rowny_wzorowi
+sprawdz "narzędzie sprawdzenia notatek Maestro równe wzorowi i wykonywalne" \
+  "plik $LIB/maestro/narzedzia/porzadki-notatek.sh (ls -l)" porzadki_notatek_rowne_wzorowi
+sprawdz "folder archiwum notatek jest" "sudo -u maestro ls -ld $ARCHIWUM_NOTATEK" \
+  sudo -u maestro test -d "$ARCHIWUM_NOTATEK"
 if [ "$TRYB" = autor ]; then
-  for skill in "${SKILLE_OBSERWATORA[@]}"; do
-    sprawdz "skill obserwatora $skill równy wzorowi" "plik $OBS_SKILLE/$skill/SKILL.md" \
-      skill_obserwatora_rowny_wzorowi "$skill"
+  for skill in "${SKILLE_MAESTRO[@]}"; do
+    sprawdz "skill Maestro $skill równy wzorowi" "plik $OBS_SKILLE/$skill/SKILL.md" \
+      skill_maestro_rowny_wzorowi "$skill"
   done
 fi
-sprawdz "ustawienia Claude Code obserwatora" "pliki $OBS_SETTINGS i $OBS_STAN" ustawienia_obserwatora
-sprawdz "usługa obserwator.service działa" "systemctl status obserwator.service" \
-  systemctl is-active --quiet obserwator.service
-sprawdz "zadanie retencji archiwum włączone" "systemctl list-timers fabryka-retencja-obserwatora.timer" \
-  systemctl is-active --quiet fabryka-retencja-obserwatora.timer
-sprawdz "proces remote-control obserwatora działa i nie czeka na pytanie (y/n)" \
-  "sudo -u obserwator tmux attach -t obserwator (wpisz y, wyjście: Ctrl-b, potem d)" remote_control_obserwatora
-sprawdz "umask 022 kont fabryka i obserwator" "pole GECOS: getent passwd fabryka obserwator" umask_kont
-sprawdz "skrzynkę pisze i czyści tylko obserwator, fabryka nie zapisuje ani nie usuwa" \
-  "właściciel obserwator:fabryka i tryb 2750 folderu $SKRZYNKA (ls -ld $SKRZYNKA)" tylko_obserwator_pisze "$SKRZYNKA"
-sprawdz "ocenę Maestro w skrzynce czyta konto fabryka, a jej właścicielem jest obserwator" \
-  "właściciel obserwator:fabryka i tryb 2750 folderu $SKRZYNKA (ls -ld $SKRZYNKA) i umask 022 obserwatora" \
-  ocena_w_skrzynce "$SKRZYNKA" obserwator
-sprawdz "klucze obserwatora 0700, fabryka ich nie czyta" \
-  "tryb 0700 folderu $OBS_DIR/klucze (sudo -u obserwator ls -ld $OBS_DIR/klucze)" klucze_obserwatora
-sprawdz "przekazanie: obserwator kładzie, fabryka czyta i usuwa" \
-  "właściciel obserwator:fabryka i tryb 2770 folderu $PRZEKAZANIE (ls -ld $PRZEKAZANIE)" \
-  obserwator_przekazuje_fabryce "$PRZEKAZANIE"
+sprawdz "ustawienia Claude Code Maestro" "pliki $OBS_SETTINGS i $OBS_STAN" ustawienia_maestro
+sprawdz "usługa maestro.service działa" "systemctl status maestro.service" \
+  systemctl is-active --quiet maestro.service
+sprawdz "zadanie retencji archiwum włączone" "systemctl list-timers maestro-retencja.timer" \
+  systemctl is-active --quiet maestro-retencja.timer
+sprawdz "proces remote-control Maestro działa i nie czeka na pytanie (y/n)" \
+  "sudo -u maestro tmux attach -t maestro (wpisz y, wyjście: Ctrl-b, potem d)" remote_control_maestro
+sprawdz "umask 022 kont fabryka i maestro" "pole GECOS: getent passwd fabryka maestro" umask_kont
+sprawdz "skrzynkę pisze i czyści tylko maestro, fabryka nie zapisuje ani nie usuwa" \
+  "właściciel maestro:fabryka i tryb 2750 folderu $SKRZYNKA (ls -ld $SKRZYNKA)" tylko_maestro_pisze "$SKRZYNKA"
+sprawdz "ocenę Maestro w skrzynce czyta konto fabryka, a jej właścicielem jest maestro" \
+  "właściciel maestro:fabryka i tryb 2750 folderu $SKRZYNKA (ls -ld $SKRZYNKA) i umask 022 Maestro" \
+  ocena_w_skrzynce "$SKRZYNKA" maestro
+sprawdz "klucze Maestro 0700, fabryka ich nie czyta" \
+  "tryb 0700 folderu $OBS_DIR/klucze (sudo -u maestro ls -ld $OBS_DIR/klucze)" klucze_maestro
+sprawdz "przekazanie: maestro kładzie, fabryka czyta i usuwa" \
+  "właściciel maestro:fabryka i tryb 2770 folderu $PRZEKAZANIE (ls -ld $PRZEKAZANIE)" \
+  maestro_przekazuje_fabryce "$PRZEKAZANIE"
 sprawdz "folderu $SERWER/zaufane z v1.0.4 nie ma" "ls -ld $SERWER/zaufane" bez_zaufanych
-sprawdz "obserwator uruchamia skrypt startowy fabryki" "plik $SUDOERS_CEL i $LIB/start-fabryki.sh" \
-  sudo -u obserwator sudo -n -u fabryka "$LIB/start-fabryki.sh"
+sprawdz "Maestro uruchamia skrypt startowy fabryki" "plik $SUDOERS_CEL i $LIB/start-fabryki.sh" \
+  sudo -u maestro sudo -n -u fabryka "$LIB/start-fabryki.sh"
 
 napisz ""
 napisz "Wynik: działa $DZIALA, nie działa $NIE_DZIALA."
-napisz "Otwórz Claude Desktop, zakładka Code, sesja »obserwator«."
+napisz "Otwórz Claude Desktop, zakładka Code, sesja »maestro«."
 if [ "$NIE_DZIALA" -eq 0 ]; then
   exit 0
 fi

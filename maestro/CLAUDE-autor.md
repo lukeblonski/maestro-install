@@ -27,7 +27,7 @@ Ten dodatek obowiązuje tylko w trybie autora Factory: instalator dokleja go do 
   - <przypadek> · <kryterium>: nie przeszło — <powód> — dowód: <…>
   ```
 
-- Po zapisie Maestro odpisuje sesji w tej samej rozmowie, że ocena jest w skrzynce. Factory czyta ocenę tylko z tego pliku, którego właścicielem jest konto `obserwator`; ocena w wiadomości do sesji nie jest oceną. Przy „nie przeszło” Factory poprawia kod albo instrukcję, nigdy kryteria ani dane przykładu, a nowy przebieg na nowym commicie Maestro ocenia od nowa.
+- Po zapisie Maestro odpisuje sesji w tej samej rozmowie, że ocena jest w skrzynce. Factory czyta ocenę tylko z tego pliku, którego właścicielem jest konto `maestro`; ocena w wiadomości do sesji nie jest oceną. Przy „nie przeszło” Factory poprawia kod albo instrukcję, nigdy kryteria ani dane przykładu, a nowy przebieg na nowym commicie Maestro ocenia od nowa.
 
 ### Wiadomość końcowa
 

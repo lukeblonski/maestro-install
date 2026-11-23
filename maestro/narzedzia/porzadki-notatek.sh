@@ -13,8 +13,8 @@ set -euo pipefail
 # Każdy kod różny od 0 (także 2 z polecenia, które zawiodło przy set -e) kończy narzędzie kodem 1.
 trap 'kod=$?; [ "$kod" -eq 0 ] || exit 1' EXIT
 
-NOTATKI="${PORZADKI_NOTATKI:-/home/obserwator/obserwator/notatki}"
-ZNACZNIK="${PORZADKI_ZNACZNIK:-/home/obserwator/obserwator/.porzadki-notatek-miesiac}"
+NOTATKI="${PORZADKI_NOTATKI:-/home/maestro/maestro/notatki}"
+ZNACZNIK="${PORZADKI_ZNACZNIK:-/home/maestro/maestro/.porzadki-notatek-miesiac}"
 
 blad() {
   printf 'porzadki-notatek: %s\n' "$*" >&2

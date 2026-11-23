@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wykonawca rozmowy obserwatora z sesją główną fabryki: sprawdzenie wiadomości i tura claude -p z sygnałem końca.
+"""Wykonawca rozmowy Maestro z sesją główną fabryki: sprawdzenie wiadomości i tura claude -p z sygnałem końca.
 
 Instalator kopiuje ten plik do /usr/local/lib/fabryka-serwer/skrzynka.py (root:root, 0755), a woła go
 start-fabryki.sh jako konto fabryka:
@@ -7,7 +7,7 @@ start-fabryki.sh jako konto fabryka:
     python3 skrzynka.py sprawdz <id wiadomości>   kod 0: wiadomość poprawna; kod 2: odmowa, powód na stderr
     python3 skrzynka.py wykonaj <id wiadomości>   tura sesji; zawsze kończy się plikiem WYNIKI/<id>.json
 
-Wiadomość to jeden plik JSON SKRZYNKA/<id>.json, który pisze tylko konto obserwator, z polami folder (LAB albo
+Wiadomość to jeden plik JSON SKRZYNKA/<id>.json, który pisze tylko konto maestro, z polami folder (LAB albo
 PROJEKTY/<projekt> z nazwą według wzorca ZMIANA; LAB tylko poza trybem użytkownika), tekst (zwykły tekst do sesji) i opcjonalnym rozmowa (UUID
 rozmowy do wznowienia). Wykonawca bierze blokadę folderu i uruchamia w nim jedną turę claude -p: tekst idzie na
 wejście standardowe, nigdy przez powłokę ani argument. Wiadomość bez pola rozmowa zaczyna nową rozmowę.
@@ -61,7 +61,7 @@ ARCHIWUM = WYNIKI + "/archiwum"
 DOM = "/home/fabryka"
 LAB = "/home/fabryka/fabryka"
 PROJEKTY = DOM + "/projekty"
-OBSERWATOR = "obserwator"
+MAESTRO = "maestro"
 # Tryb instalacji w pliku roota (instalator, --tryb-autora): autor albo uzytkownik; zestaw Factory trybu użytkownika.
 TRYB = "/var/lib/fabryka-serwer/tryb"
 ZESTAW = "/usr/local/lib/fabryka"
@@ -93,14 +93,14 @@ def folder_fabryki():
 FABRYKA = folder_fabryki()
 REGULA_AUTOPILOTA = f"Bash(python3 {FABRYKA}/scripts/autopilot.py:*)"
 SESJA_SERWERA = (
-    "Rozmówcą w tej rozmowie jest obserwator, który pisze w imieniu człowieka. Działaj według "
-    f"{FABRYKA}/docs/sesja-glowna.md, sekcja „Na serwerze: rozmowa przez obserwatora”."
+    "Rozmówcą w tej rozmowie jest Maestro, który pisze w imieniu człowieka. Działaj według "
+    f"{FABRYKA}/docs/sesja-glowna.md, sekcja „Na serwerze: rozmowa przez Maestro”."
 )
 # Zmienna tury: autopilot bez --w-tle przy niej kończy się kodem 2 (scripts/autopilot.py, ROZMOWA_ENV).
 ROZMOWA_ENV = "FABRYKA_ROZMOWA"
 WZNOWIENIE = (
     "Wywołanie autopilota w tym folderze się skończyło. Przeczytaj jego stan.json i koniec logu {log} "
-    "i postępuj według sekcji „Na serwerze: rozmowa przez obserwatora” w "
+    "i postępuj według sekcji „Na serwerze: rozmowa przez Maestro” w "
     f"{FABRYKA}/docs/sesja-glowna.md."
 )
 LOG_AUTOPILOTA = "wyjscie.log"
@@ -221,9 +221,9 @@ def przeczytaj_polecenie(id_wiadomosci):
     """(dane, None) dla poprawnego pliku SKRZYNKA/<id>.json albo (None, powód)."""
     sciezka = os.path.join(SKRZYNKA, id_wiadomosci + ".json")
     try:
-        konto = pwd.getpwnam(OBSERWATOR)
+        konto = pwd.getpwnam(MAESTRO)
     except KeyError:
-        return None, f"nie ma konta {OBSERWATOR}"
+        return None, f"nie ma konta {MAESTRO}"
     try:
         fd = os.open(sciezka, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
@@ -235,7 +235,7 @@ def przeczytaj_polecenie(id_wiadomosci):
         if not stat.S_ISREG(info.st_mode):
             return None, f"{sciezka} nie jest zwykłym plikiem"
         if info.st_uid != konto.pw_uid:
-            return None, f"{sciezka} nie należy do konta {OBSERWATOR}"
+            return None, f"{sciezka} nie należy do konta {MAESTRO}"
         if info.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
             return None, f"{sciezka} ma prawo zapisu dla grupy albo innych ({stat.filemode(info.st_mode)})"
         if info.st_size > MAKS_PLIK:

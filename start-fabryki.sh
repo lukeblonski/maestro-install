@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Skrypt startowy fabryki: cel jedynej reguły sudo obserwatora
+# Skrypt startowy fabryki: cel jedynej reguły sudo Maestro
 # (sudo -n -u fabryka /usr/local/lib/fabryka-serwer/start-fabryki.sh [<id polecenia>]).
 #
 # Bez argumentu: zakłada sesję tmux "fabryka" z powłoką w folderze laboratorium (poza trybem użytkownika z pliku
@@ -9,7 +9,7 @@ set -euo pipefail
 # Kod 0: sesja "fabryka" istnieje po przebiegu. Kod 1: inne konto niż fabryka albo sesja nie powstała.
 #
 # Z jednym argumentem <id wiadomości> (wzorzec RRRRMMDD-GGMMSS-xxxx): przekazuje sesji głównej fabryki
-# wiadomość obserwatora z pliku /var/lib/fabryka-serwer/skrzynka/<id>.json (folder i zwykły tekst).
+# wiadomość Maestro z pliku /var/lib/fabryka-serwer/skrzynka/<id>.json (folder i zwykły tekst).
 # Sprawdzenie (pola, folder, właściciel i prawa pliku) robi skrzynka.py sprawdz, zanim cokolwiek ruszy;
 # turę claude -p w folderze wiadomości uruchamia skrzynka.py wykonaj w usłudze systemd-run --user konta
 # fabryka i skrypt wraca od razu. Koniec pracy to zawsze plik /var/lib/fabryka-serwer/wyniki/<id>.json.
@@ -59,8 +59,8 @@ if [ "$#" -eq 1 ]; then
   if ! /usr/bin/python3 /usr/local/lib/fabryka-serwer/skrzynka.py sprawdz "$1"; then
     exit 2
   fi
-  # Praca w menedżerze użytkownika fabryka, a nie w grupie procesów obserwator.service, z której przychodzi
-  # sudo: restart usługi obserwatora jej nie przerywa. Treść polecenia nie przechodzi przez powłokę.
+  # Praca w menedżerze użytkownika fabryka, a nie w grupie procesów maestro.service, z której przychodzi
+  # sudo: restart usługi Maestro jej nie przerywa. Treść polecenia nie przechodzi przez powłokę.
   export XDG_RUNTIME_DIR="/run/user/$(id -u)"
   export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
   if systemd-run --user --quiet --collect --unit="fabryka-polecenie-$1" \
@@ -76,7 +76,7 @@ cd "$FOLDER"
 
 if ! tmux has-session -t fabryka 2>/dev/null; then
   # Serwer tmux startuje w menedżerze użytkownika fabryka (linger włącza instalator), a nie w grupie
-  # procesów usługi obserwatora, z której przychodzi sudo: restart obserwator.service go nie zabija.
+  # procesów usługi Maestro, z której przychodzi sudo: restart maestro.service go nie zabija.
   # Usługa przejściowa, nie --scope: konto nie może przenieść procesu z grupy usługi systemowej.
   export XDG_RUNTIME_DIR="/run/user/$(id -u)"
   export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"

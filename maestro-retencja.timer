@@ -1,0 +1,10 @@
+[Unit]
+Description=Codzienna retencja archiwum Maestro
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+Unit=maestro-retencja.service
+
+[Install]
+WantedBy=timers.target
