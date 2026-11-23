@@ -11,7 +11,7 @@ export PATH="/home/maestro/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/
 
 FOLDER=/home/maestro/maestro
 CLAUDE=/home/maestro/.local/bin/claude
-UMOWA=/usr/local/lib/fabryka-serwer/maestro/CLAUDE.md
+UMOWA=/usr/local/lib/factory-serwer/maestro/CLAUDE.md
 
 if [ ! -f "$UMOWA" ]; then
   echo "start-maestro.sh: brak umowy Maestro $UMOWA; uruchom instalator ponownie. Maestro nie startuje bez umowy." >&2

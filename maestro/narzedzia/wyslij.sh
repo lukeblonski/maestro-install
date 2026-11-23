@@ -10,19 +10,19 @@
 #   <Projekt> <zmiana> · <krok> · krok <n>/<N> · od <GG:MM>   (n/N z pola kroki w stan.json autopilota, czas serwera)
 # bez autopilota nic; ostatnia wypisana linia leży w skrzynka/<id>.status, więc ponowne czekanie jej nie powtarza.
 # Kody: 0 wynik jest: linie WYNIK, tury=… odmowy=… i „plik wyniku: <ścieżka>” (odpowiedź sesji czytaj z pliku);
-#       1/2 start-fabryki.sh odrzucił albo nie ruszył (bez wyniku), zły plik wyniku, złe użycie;
+#       1/2 start-factory.sh odrzucił albo nie ruszył (bez wyniku), zły plik wyniku, złe użycie;
 #       4 wyniku jeszcze nie ma po LIMIT_S czekania, a praca trwa — uruchom od razu „wyslij.sh czekaj <id>”;
 #       5 wyniku nie ma, a praca nie żyje (proces ze znacznika nie żyje albo to inny proces, albo nie ma znacznika
 #         KARENCJA_S po wysłaniu) — praca przerwana (umowa: „kontynuuj” jako nowa rozmowa);
 #       6 folder wiadomości nie istnieje (usunięty) — bez „kontynuuj” i bez dalszego czekania.
 # Życie pracy i folder sprawdza każdy obrót pętli (co ODSTEP_S), a przed kodem 5 albo 6 jeszcze raz plik wyniku.
-# Zmienne WYSLIJ_* podmieniają ścieżki i czasy (testy); reguła sudo przepuszcza tylko stałą ścieżkę start-fabryki.sh.
+# Zmienne WYSLIJ_* podmieniają ścieżki i czasy (testy); reguła sudo przepuszcza tylko stałą ścieżkę start-factory.sh.
 set -uo pipefail
 
-SKRZYNKA="${WYSLIJ_SKRZYNKA:-/var/lib/fabryka-serwer/skrzynka}"
-WYNIKI="${WYSLIJ_WYNIKI:-/var/lib/fabryka-serwer/wyniki}"
-START="${WYSLIJ_START:-/usr/local/lib/fabryka-serwer/start-fabryki.sh}"
-LAB="${WYSLIJ_LAB:-/home/fabryka/fabryka}"
+SKRZYNKA="${WYSLIJ_SKRZYNKA:-/var/lib/factory-serwer/skrzynka}"
+WYNIKI="${WYSLIJ_WYNIKI:-/var/lib/factory-serwer/wyniki}"
+START="${WYSLIJ_START:-/usr/local/lib/factory-serwer/start-factory.sh}"
+LAB="${WYSLIJ_LAB:-/home/factory/fabryka}"
 LIMIT_S="${WYSLIJ_LIMIT_S:-480}"
 ODSTEP_S="${WYSLIJ_ODSTEP_S:-10}"
 KARENCJA_S="${WYSLIJ_KARENCJA_S:-120}"
@@ -270,9 +270,9 @@ id="$(date +%Y%m%d-%H%M%S)-$(tr -dc a-z0-9 < /dev/urandom | head -c4)"
 cp -- "$plik" "$SKRZYNKA/$id.json" || { echo "nie mogę zapisać $SKRZYNKA/$id.json" >&2; exit 1; }
 chmod 640 "$SKRZYNKA/$id.json"
 echo "WYSŁANO $id"
-sudo -n -u fabryka "$START" "$id"; kod=$?
+sudo -n -u factory "$START" "$id"; kod=$?
 if [ "$kod" -ne 0 ]; then
-  echo "ODRZUCONE $id: start-fabryki.sh kod $kod (powód wyżej); pliku wyniku nie będzie"
+  echo "ODRZUCONE $id: start-factory.sh kod $kod (powód wyżej); pliku wyniku nie będzie"
   exit "$kod"
 fi
 czekaj "$id"; exit $?

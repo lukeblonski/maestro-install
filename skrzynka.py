@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Wykonawca rozmowy Maestro z sesją główną fabryki: sprawdzenie wiadomości i tura claude -p z sygnałem końca.
+"""Wykonawca rozmowy Maestro z sesją główną Factory: sprawdzenie wiadomości i tura claude -p z sygnałem końca.
 
-Instalator kopiuje ten plik do /usr/local/lib/fabryka-serwer/skrzynka.py (root:root, 0755), a woła go
-start-fabryki.sh jako konto fabryka:
+Instalator kopiuje ten plik do /usr/local/lib/factory-serwer/skrzynka.py (root:root, 0755), a woła go
+start-factory.sh jako konto factory:
 
     python3 skrzynka.py sprawdz <id wiadomości>   kod 0: wiadomość poprawna; kod 2: odmowa, powód na stderr
     python3 skrzynka.py wykonaj <id wiadomości>   tura sesji; zawsze kończy się plikiem WYNIKI/<id>.json
@@ -32,9 +32,9 @@ bez folderu znaczy usunięty folder. Przy każdym wykonaj, po blokadzie folderu,
 bieżącej wiadomości (nowa wiadomość zastępuje przerwaną pracę), a praca nie żyje (nie ma procesu z pid albo jego
 argumenty nie kończą się na wykonaj <id>). Nic nie kasuje; identyfikator z ARCHIWUM zostaje zajęty.
 
-Folder Factory daje tryb z pliku roota TRYB (folder_fabryki): uzytkownik to ZESTAW (zestaw Factory w folderze roota,
+Folder Factory daje tryb z pliku roota TRYB (folder_factory): uzytkownik to ZESTAW (zestaw Factory w folderze roota,
 tylko do odczytu), a autor, brak pliku albo błąd odczytu to LAB. Reguła autopilota i teksty tury (REGULA_AUTOPILOTA,
-SESJA_SERWERA, WZNOWIENIE) to stałe liczone przy imporcie z folder_fabryki(): wykonawca biegnie jako osobny proces na
+SESJA_SERWERA, WZNOWIENIE) to stałe liczone przy imporcie z folder_factory(): wykonawca biegnie jako osobny proces na
 każdą wiadomość. W trybie użytkownika wiadomość do folderu LAB jest odmową.
 
 Foldery i konto są stałymi modułu; testy podmieniają je w procesie. Plik nie czyta zmiennych środowiska
@@ -55,16 +55,16 @@ import time
 import traceback
 import uuid
 
-SKRZYNKA = "/var/lib/fabryka-serwer/skrzynka"
-WYNIKI = "/var/lib/fabryka-serwer/wyniki"
+SKRZYNKA = "/var/lib/factory-serwer/skrzynka"
+WYNIKI = "/var/lib/factory-serwer/wyniki"
 ARCHIWUM = WYNIKI + "/archiwum"
-DOM = "/home/fabryka"
-LAB = "/home/fabryka/fabryka"
+DOM = "/home/factory"
+LAB = "/home/factory/fabryka"
 PROJEKTY = DOM + "/projekty"
 MAESTRO = "maestro"
 # Tryb instalacji w pliku roota (instalator, --tryb-autora): autor albo uzytkownik; zestaw Factory trybu użytkownika.
-TRYB = "/var/lib/fabryka-serwer/tryb"
-ZESTAW = "/usr/local/lib/fabryka"
+TRYB = "/var/lib/factory-serwer/tryb"
+ZESTAW = "/usr/local/lib/factory"
 
 ID = re.compile(r"[0-9]{8}-[0-9]{6}-[a-z0-9]{4}")
 ZMIANA = re.compile(r"[a-z][a-z0-9]*(-[a-z0-9]+)*")
@@ -78,7 +78,7 @@ MAKS_TRESC = 20000
 
 
 
-def folder_fabryki():
+def folder_factory():
     """Folder Factory według trybu z pliku TRYB: treść uzytkownik daje ZESTAW, a autor, brak pliku, inna treść albo
     błąd odczytu dają LAB."""
     try:
@@ -90,18 +90,18 @@ def folder_fabryki():
 
 
 # Wywołanie tury. Reguła zezwala sesji uruchomić pełną ścieżką autopilota z folderu Factory trybu (Z6).
-FABRYKA = folder_fabryki()
-REGULA_AUTOPILOTA = f"Bash(python3 {FABRYKA}/scripts/autopilot.py:*)"
+FACTORY = folder_factory()
+REGULA_AUTOPILOTA = f"Bash(python3 {FACTORY}/scripts/autopilot.py:*)"
 SESJA_SERWERA = (
     "Rozmówcą w tej rozmowie jest Maestro, który pisze w imieniu człowieka. Działaj według "
-    f"{FABRYKA}/docs/sesja-glowna.md, sekcja „Na serwerze: rozmowa przez Maestro”."
+    f"{FACTORY}/docs/sesja-glowna.md, sekcja „Na serwerze: rozmowa przez Maestro”."
 )
 # Zmienna tury: autopilot bez --w-tle przy niej kończy się kodem 2 (scripts/autopilot.py, ROZMOWA_ENV).
-ROZMOWA_ENV = "FABRYKA_ROZMOWA"
+ROZMOWA_ENV = "FACTORY_ROZMOWA"
 WZNOWIENIE = (
     "Wywołanie autopilota w tym folderze się skończyło. Przeczytaj jego stan.json i koniec logu {log} "
     "i postępuj według sekcji „Na serwerze: rozmowa przez Maestro” w "
-    f"{FABRYKA}/docs/sesja-glowna.md."
+    f"{FACTORY}/docs/sesja-glowna.md."
 )
 LOG_AUTOPILOTA = "wyjscie.log"
 BLOKADA_AUTOPILOTA = "stan.lock"
@@ -148,7 +148,7 @@ def problemy(dane):
         if not isinstance(folder, str) or (folder != LAB and nazwa_projektu(folder) is None):
             wynik.append(f"folder to nie {LAB} ani {PROJEKTY}/<projekt> z nazwą według wzorca "
                          f"{ZMIANA.pattern}: {folder!r}")
-        elif folder == LAB and folder_fabryki() != LAB:
+        elif folder == LAB and folder_factory() != LAB:
             wynik.append(f"folder laboratorium {LAB} tylko w trybie autora; w trybie użytkownika (plik {TRYB}) "
                          f"wiadomość idzie do {PROJEKTY}/<projekt>")
     if "tekst" in dane:
@@ -498,7 +498,7 @@ def teraz():
 
 
 def srodowisko():
-    """Środowisko pracy jak w start-fabryki.sh: usługa systemd-run --user nie dziedziczy go z sudo."""
+    """Środowisko pracy jak w start-factory.sh: usługa systemd-run --user nie dziedziczy go z sudo."""
     env = dict(os.environ)
     runtime = f"/run/user/{os.getuid()}"
     env.update({
@@ -545,7 +545,7 @@ def dopisz_do_logu(sciezka, tekst):
 def plik_blokady(folder):
     """Blokada folderu w WYNIKI: jedna tura albo czekanie naraz na folder."""
     nazwa = nazwa_projektu(folder)
-    return os.path.join(WYNIKI, ".zajete-fabryka" if nazwa is None else f".zajete-projekt-{nazwa}")
+    return os.path.join(WYNIKI, ".zajete-factory" if nazwa is None else f".zajete-projekt-{nazwa}")
 
 
 def przygotuj_folder(folder):

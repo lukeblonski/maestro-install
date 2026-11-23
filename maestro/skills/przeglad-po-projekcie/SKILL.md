@@ -1,6 +1,6 @@
 ---
 name: przeglad-po-projekcie
-description: Stała procedura Maestro po zbudowaniu aplikacji - zbieranie uwag człowieka i wpadek w trakcie projektu w jednym pliku, potem analiza punkt po punkcie (problem, przyczyna, najprostsze rozwiązanie, kryterium), złożenie pozycji roadmapy laboratorium i droga do akceptacji. Trigger phrases - "przegląd po projekcie", "analiza uwag", "przeanalizujmy problemy z budowy", "co poprawić w fabryce po projekcie", "zróbmy to samo co po sprawdz-film".
+description: Stała procedura Maestro po zbudowaniu aplikacji - zbieranie uwag człowieka i wpadek w trakcie projektu w jednym pliku, potem analiza punkt po punkcie (problem, przyczyna, najprostsze rozwiązanie, kryterium), złożenie pozycji roadmapy laboratorium i droga do akceptacji. Trigger phrases - "przegląd po projekcie", "analiza uwag", "przeanalizujmy problemy z budowy", "co poprawić w Factory po projekcie", "zróbmy to samo co po sprawdz-film".
 ---
 
 # Przegląd po projekcie
@@ -56,7 +56,7 @@ Po kolei, jedna pozycja naraz, tylko gdy w Factory nic się nie buduje (umowa):
 1. Opis w pełnym wzorze ([[opis-zmiany-wzor]]): kryteria, przykład na tym projekcie, pod spodem, co zmienić, czego nie wiem, granice, najbliżej konfliktu; przypięcie do piramidy (zakład, miara, cel 90 dni). Plik `notatki/szkice/pozycja-<n>-<nazwa>.md`.
 2. Niezależny subagent dostaje tylko ścieżkę szkicu, pliki zasad (strategia, umowa, najprostsze rozwiązanie) i **opis prawdziwego zdarzenia z projektu**, które pozycja ma naprawić, bez mojej rekomendacji: „znajdź do 3 konfliktów albo luk” ([[lista-kontrolna-zgodnosci]]) oraz **„odtwórz to zdarzenie krok po kroku na mechanizmie z pozycji: w którym kroku i czym zostałoby złapane? Jeśli nie zostałoby złapane, to luka numer 1”**. Sam robię to samo przed pokazaniem opisu człowiekowi: każde „na starcie”, „sprawdza” zamieniam na konkretny krok i konkretny sposób sprawdzenia. (2026-11-10: kryterium „sprawdzenie tylko do odczytu” nie złapałoby „must be root” z sprawdz-film; złapał to człowiek, nie ja ani subagent.) Poprawiam szkic.
 3. Człowiek dostaje cały opis raz, przed wysłaniem do Factory.
-4. Wysyłam Factory szkic z prośbą „sprawdź pozycję” (do `/home/fabryka/fabryka`).
+4. Wysyłam Factory szkic z prośbą „sprawdź pozycję” (do `/home/factory/fabryka`).
 5. Po odpowiedzi Factory: tylko sprawy do decyzji i pytanie akceptacji narzędziem pytań (wiersz 20), z całą treścią potrzebną do decyzji w samym okienku, nie nad nim.
 6. Zaakceptowaną pozycję wysyłam do zapisu z cytatem akceptacji człowieka. Następna pozycja.
 

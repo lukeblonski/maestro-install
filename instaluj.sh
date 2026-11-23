@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Instalator fabryki i Maestro na czysty serwer Ubuntu (Hostinger KVM 2).
+# Instalator Factory i Maestro na czysty serwer Ubuntu (Hostinger KVM 2).
 # Uruchamiany jako root poleceniem z README.md: pobranie z tagu i sprawdzenie sumy SHA-256.
 # Dziesięć kroków; każdy sprawdza stan przed działaniem, więc ponowne uruchomienie jest bezpieczne.
 #
 # Zasada bezpieczeństwa: root nie otwiera żadnej ścieżki pod /home/. Pliki kont czyta i zapisuje
 # konto właściciela (sudo -u <konto> tee, cmp -, cp, rm, mkdir, find, diff, git, jq), a treść przychodzi przez
 # standardowe wejście z folderu tymczasowego roota. Root zmienia tylko pliki systemu
-# (/etc, /usr/local/lib/fabryka, /usr/local/lib/fabryka-serwer, /var/lib/fabryka-serwer, /var/log) i tryby samych
+# (/etc, /usr/local/lib/factory, /usr/local/lib/factory-serwer, /var/lib/factory-serwer, /var/log) i tryby samych
 # katalogów domowych. Bez "sudo -u <konto> sh -c" i "sudo -u <konto> bash -c".
 #
 # Opcje: --tryb-autora (laboratorium autora Factory zostaje klonem; tryb zapisany w pliku roota) i --zestaw <plik>
-# (archiwum zestawu Factory z tagu laboratorium, scripts/zestaw_fabryki.py, zamiast archiwum z wydania w trybie
+# (archiwum zestawu Factory z tagu laboratorium, scripts/zestaw_factory.py, zamiast archiwum z wydania w trybie
 # użytkownika).
 
 REPO="lukeblonski/maestro-install"
-WERSJA="v1.0.20"
-# Suma SHA-256 pliku zestaw-fabryki.tar.gz wydania WERSJA, zrobionego przez scripts/zestaw_fabryki.py z tagu
+WERSJA="v1.0.21"
+# Suma SHA-256 pliku zestaw-factory.tar.gz wydania WERSJA, zrobionego przez scripts/zestaw_factory.py z tagu
 # zestaw-<WERSJA> laboratorium; 64 zera do przypięcia przy wydaniu.
-ZESTAW_SUMA="a68a3c3d9576e3f6fea41576bc3b6e23c09237d998fd70e32ffb441f76f16b51"
+ZESTAW_SUMA="ff58bb8f8c31223dd7ffbd5f2d74eb39d6b6320ed99c4f77937a5052139a4dac"
 
 # gitleaks w wersji z szablonu CI guardrails (skills/guardrails/templates/ci.yml, GITLEAKS_VERSION) i suma SHA-256
 # archiwum linux_x64 z oficjalnego pliku sum tego wydania (gitleaks_8.30.1_checksums.txt).
 GITLEAKS_WERSJA="8.30.1"
 GITLEAKS_SUMA="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
 
-# mise, menedżer wersji języków projektów konta fabryka, w przypiętej wersji i suma SHA-256 binarki
+# mise, menedżer wersji języków projektów konta factory, w przypiętej wersji i suma SHA-256 binarki
 # mise-v2026.11.4-linux-x64 z pliku SHASUMS256.txt tego wydania (podpisanego GPG, zgodna z polem digest w API GitHuba).
-# Języki instaluje potem konto fabryka bez roota, tylko w folderze projektu (plik mise.toml).
+# Języki instaluje potem konto factory bez roota, tylko w folderze projektu (plik mise.toml).
 MISE_WERSJA="2026.11.4"
 MISE_SUMA="0296d9cba9324106d4e0962bb94a2072902f3658813aeb3b09504947bb8ddc2b"
 
@@ -44,7 +44,7 @@ PROBA_PRZEGLADARKI='<!doctype html><body><script>document.body.textContent=new U
 # Nieudane pobranie kończy instalator kodem 1, zanim cokolwiek się zmieni.
 PLIKI=(
   "sudoers-maestro"
-  "start-fabryki.sh"
+  "start-factory.sh"
   "skrzynka.py"
   "start-maestro.sh"
   "maestro.service"
@@ -60,25 +60,27 @@ PLIKI=(
 )
 
 # Pliki serwera w jednym drzewie roota (wzor_serwera, drzewo_roota): skrypty startowe, wykonawca rozmowy, umowa Maestro
-# w $LIB/maestro/CLAUDE.md i narzędzia Maestro w $LIB/maestro/narzedzia; konta fabryka i maestro ich nie zmienią.
-LIB=/usr/local/lib/fabryka-serwer
-# Foldery wiadomości Maestro: skrzynkę pisze tylko maestro, wyniki tylko fabryka.
-# W przekazaniu maestro kładzie plik z wynikiem pracy w panelu usługi, a fabryka go czyta i usuwa.
-SERWER=/var/lib/fabryka-serwer
+# w $LIB/maestro/CLAUDE.md i narzędzia Maestro w $LIB/maestro/narzedzia; konta factory i maestro ich nie zmienią.
+LIB=/usr/local/lib/factory-serwer
+# Foldery wiadomości Maestro: skrzynkę pisze tylko maestro, wyniki tylko factory.
+# W przekazaniu maestro kładzie plik z wynikiem pracy w panelu usługi, a factory go czyta i usuwa.
+SERWER=/var/lib/factory-serwer
 SKRZYNKA="$SERWER/skrzynka"
 WYNIKI="$SERWER/wyniki"
 PRZEKAZANIE="$SERWER/przekazanie"
 JEDNOSTKI=/etc/systemd/system
 SUDOERS_CEL=/etc/sudoers.d/maestro
 APPARMOR_ROOTLESSKIT=/etc/apparmor.d/usr.bin.rootlesskit
-LOG=/var/log/fabryka-instalator.log
+LOG=/var/log/factory-instalator.log
 
 # Nazwa konta Maestro w wydaniach do v1.0.19: instalator przy nim staje (konto_pod_stara_nazwa).
 STARE_KONTO="obserwator"
+# Nazwa konta Factory w wydaniach do v1.0.20: instalator przy nim staje (konto_pod_stara_nazwa).
+STARE_KONTO_FACTORY="fabryka"
 OBS_HOME=/home/maestro
-FAB_HOME=/home/fabryka
+FAB_HOME=/home/factory
 OBS_DIR=/home/maestro/maestro
-LAB_DIR=/home/fabryka/fabryka
+LAB_DIR=/home/factory/fabryka
 NOTATKI="$OBS_DIR/notatki"
 ARCHIWUM="$OBS_DIR/archiwum"
 # Archiwum notatek (umowa, „Pamięć”): poza retencją, która czyści tylko $ARCHIWUM.
@@ -93,8 +95,8 @@ OBS_STAN="$OBS_HOME/.claude.json"
 OBS_CLAUDE="$OBS_HOME/.local/bin/claude"
 FAB_CLAUDE="$FAB_HOME/.local/bin/claude"
 FAB_SKILLE="$FAB_HOME/.claude/skills"
-# Zapis nazw skilli, które instalator skopiował do FAB_SKILLE (jedna w linii); stan fabryki konta fabryka.
-FAB_SKILLE_ZAPIS="$FAB_HOME/.local/state/fabryka/skille-instalatora"
+# Zapis nazw skilli, które instalator skopiował do FAB_SKILLE (jedna w linii); stan Factory konta factory.
+FAB_SKILLE_ZAPIS="$FAB_HOME/.local/state/factory/skille-instalatora"
 FAB_SETTINGS="$FAB_HOME/.claude/settings.json"
 
 # Tryb instalacji (autor albo uzytkownik) w pliku roota: zapisuje go tylko opcja --tryb-autora albo pierwsze
@@ -103,13 +105,15 @@ TRYB_PLIK="$SERWER/tryb"
 # Tryb użytkownika: zestaw Factory w folderze roota i skille Factory w folderze zarządzanym Claude Code (czytają go
 # wszystkie konta, zmienia tylko root). Wzór każdego drzewa roota to lista sum w WZORY, a zmienione pliki trafiają do
 # KOPIE (root, 0700).
-ZESTAW=/usr/local/lib/fabryka
+ZESTAW=/usr/local/lib/factory
 ZARZADZANE=/etc/claude-code/.claude/skills
 WZORY="$SERWER/wzory"
 KOPIE="$SERWER/kopie"
 
-ZNACZNIK_PATH="# fabryka-serwer: ścieżka i umask konta (dopisane przez instalator)"
-ZNACZNIK_DOCKER="# fabryka-serwer: Docker bez roota (dopisane przez instalator)"
+ZNACZNIK_PATH="# factory-serwer: ścieżka i umask konta (dopisane przez instalator)"
+ZNACZNIK_DOCKER="# factory-serwer: Docker bez roota (dopisane przez instalator)"
+# Przedrostek znaczników w ~/.profile i ~/.bashrc z wydań do v1.0.20: dopisz_blok zastępuje go nowym, bez drugiego bloku.
+STARY_ZNACZNIK_POWLOKI="# fabryka-serwer:"
 
 # --- komunikaty ------------------------------------------------------------------------------------------
 
@@ -161,7 +165,7 @@ czytaj_opcje() {
         for sciezka in "$ZESTAW_PLIK" "$(realpath -m -- "$ZESTAW_PLIK" 2> /dev/null || true)"; do
           case "$sciezka" in
             /home|/home/*)
-              przerwij "Archiwum zestawu $ZESTAW_PLIK leży pod /home, a root nie otwiera ścieżek pod /home. Skopiuj je do /root (np. /root/zestaw-fabryki.tar.gz) i podaj tę ścieżkę. Niczego nie zmieniono."
+              przerwij "Archiwum zestawu $ZESTAW_PLIK leży pod /home, a root nie otwiera ścieżek pod /home. Skopiuj je do /root (np. /root/zestaw-factory.tar.gz) i podaj tę ścieżkę. Niczego nie zmieniono."
               ;;
           esac
         done
@@ -270,31 +274,31 @@ sprawdz_archiwum() {
   fi
 }
 
-# archiwum_z_opcji: gdy podano --zestaw, kopiuje archiwum do $TMP/zestaw-fabryki.tar.gz i rozpakowuje kopię do
+# archiwum_z_opcji: gdy podano --zestaw, kopiuje archiwum do $TMP/zestaw-factory.tar.gz i rozpakowuje kopię do
 # $TMP/zestaw (sprawdz_archiwum); zły plik albo złe archiwum przerywa instalator kodem 1.
 archiwum_z_opcji() {
   [ -n "$ZESTAW_PLIK" ] || return 0
   if [ -L "$ZESTAW_PLIK" ] || [ ! -f "$ZESTAW_PLIK" ]; then
     przerwij "Archiwum zestawu $ZESTAW_PLIK nie jest zwykłym plikiem. Niczego nie zmieniono."
   fi
-  cp -P -- "$ZESTAW_PLIK" "$TMP/zestaw-fabryki.tar.gz" || przerwij "Nie mogę odczytać archiwum $ZESTAW_PLIK. Niczego nie zmieniono."
-  if [ -L "$TMP/zestaw-fabryki.tar.gz" ]; then
+  cp -P -- "$ZESTAW_PLIK" "$TMP/zestaw-factory.tar.gz" || przerwij "Nie mogę odczytać archiwum $ZESTAW_PLIK. Niczego nie zmieniono."
+  if [ -L "$TMP/zestaw-factory.tar.gz" ]; then
     przerwij "Archiwum zestawu $ZESTAW_PLIK nie jest zwykłym plikiem. Niczego nie zmieniono."
   fi
-  sprawdz_archiwum "$TMP/zestaw-fabryki.tar.gz" "$TMP/zestaw" \
+  sprawdz_archiwum "$TMP/zestaw-factory.tar.gz" "$TMP/zestaw" \
     || przerwij "Archiwum zestawu $ZESTAW_PLIK nie przechodzi sprawdzenia. Niczego nie zmieniono."
 }
 
-# archiwum_z_wydania: tryb użytkownika bez --zestaw. Pobiera zestaw-fabryki.tar.gz z wydania WERSJA repozytorium REPO
-# do $TMP/zestaw-fabryki.tar.gz, sprawdza jego sumę z ZESTAW_SUMA i rozpakowuje je do $TMP/zestaw (sprawdz_archiwum).
+# archiwum_z_wydania: tryb użytkownika bez --zestaw. Pobiera zestaw-factory.tar.gz z wydania WERSJA repozytorium REPO
+# do $TMP/zestaw-factory.tar.gz, sprawdza jego sumę z ZESTAW_SUMA i rozpakowuje je do $TMP/zestaw (sprawdz_archiwum).
 # Błąd pobrania, inna suma albo złe archiwum przerywa instalator kodem 1, zanim cokolwiek się zmieni. W trybie autora
 # i z --zestaw nic nie robi.
 archiwum_z_wydania() {
-  local archiwum="$TMP/zestaw-fabryki.tar.gz"
+  local archiwum="$TMP/zestaw-factory.tar.gz"
   if [ "$TRYB" = autor ] || [ -n "$ZESTAW_PLIK" ]; then
     return 0
   fi
-  if ! curl -fsSL "https://github.com/${REPO}/releases/download/${WERSJA}/zestaw-fabryki.tar.gz" -o "$archiwum"; then
+  if ! curl -fsSL "https://github.com/${REPO}/releases/download/${WERSJA}/zestaw-factory.tar.gz" -o "$archiwum"; then
     przerwij "Nie mogę pobrać archiwum zestawu Factory z wydania $WERSJA. Niczego nie zmieniono; sprawdź sieć i uruchom ponownie."
   fi
   if ! echo "$ZESTAW_SUMA  $archiwum" | sha256sum -c - > /dev/null 2>&1; then
@@ -305,12 +309,17 @@ archiwum_z_wydania() {
   napisz "Archiwum zestawu Factory z wydania $WERSJA pobrane (suma SHA-256 zgodna)."
 }
 
-# konto_pod_stara_nazwa: serwer z kontem STARE_KONTO i bez konta maestro ma Maestro z wydania do v1.0.19.
-# Instalator nie zakłada wtedy drugiego konta i nie przenosi starego: kończy się kodem 1, zanim cokolwiek
-# zmieni (przed folderem tymczasowym, dziennikiem, apt-get i useradd). Przeniesienie robi blok z instrukcji wydania.
+# konto_pod_stara_nazwa: serwer z kontem STARE_KONTO i bez konta maestro ma Maestro z wydania do v1.0.19, a serwer
+# z kontem STARE_KONTO_FACTORY i bez konta factory ma Factory z wydania do v1.0.20 (najpierw para Maestro, bo serwer
+# sprzed v1.0.20 dostaje najpierw blok wydania v1.0.20). Instalator nie zakłada wtedy drugiego konta i nie przenosi
+# starego: kończy się kodem 1, zanim cokolwiek zmieni (przed folderem tymczasowym, dziennikiem, apt-get i useradd).
+# Przeniesienie robi blok z instrukcji wydania.
 konto_pod_stara_nazwa() {
   if id -u "$STARE_KONTO" > /dev/null 2>&1 && ! id -u maestro > /dev/null 2>&1; then
     przerwij "Ten serwer ma Maestro pod starą nazwą $STARE_KONTO: wklej najpierw blok przeniesienia z instrukcji wydania albo zainstaluj na czystym serwerze."
+  fi
+  if id -u "$STARE_KONTO_FACTORY" > /dev/null 2>&1 && ! id -u factory > /dev/null 2>&1; then
+    przerwij "Ten serwer ma Factory pod starą nazwą konta $STARE_KONTO_FACTORY: wklej najpierw blok przeniesienia z instrukcji wydania albo zainstaluj na czystym serwerze."
   fi
 }
 
@@ -349,14 +358,14 @@ ustal_tryb
 archiwum_z_opcji
 archiwum_z_wydania
 if [ "$TRYB" = autor ]; then
-  FOLDER_FABRYKI="$LAB_DIR"
+  FOLDER_FACTORY="$LAB_DIR"
   FOLDER_INNEGO_TRYBU="$ZESTAW"
 else
-  FOLDER_FABRYKI="$ZESTAW"
+  FOLDER_FACTORY="$ZESTAW"
   FOLDER_INNEGO_TRYBU="$LAB_DIR"
 fi
-# Hak startu sesji konta fabryka z folderu Factory trybu; polecenie z folderu drugiego trybu znika z ustawień.
-HAK_FABRYKI="python3 -I -B $FOLDER_FABRYKI/scripts/hook_start_sesji.py"
+# Hak startu sesji konta factory z folderu Factory trybu; polecenie z folderu drugiego trybu znika z ustawień.
+HAK_FACTORY="python3 -I -B $FOLDER_FACTORY/scripts/hook_start_sesji.py"
 HAK_INNEGO_TRYBU="python3 -I -B $FOLDER_INNEGO_TRYBU/scripts/hook_start_sesji.py"
 if [ "$TRYB" = autor ]; then
   OPIS_TRYBU="tryb autora: laboratorium Factory w $LAB_DIR zostaje klonem"
@@ -378,7 +387,7 @@ done
 touch "$LOG"
 chmod 0600 "$LOG"
 LOG_GOTOWY=1
-napisz "=== Instalator fabryki $WERSJA, $(date -Is) ==="
+napisz "=== Instalator Factory $WERSJA, $(date -Is) ==="
 napisz "Tryb instalacji: $TRYB ($OPIS_TRYBU)."
 gotowe "pliki instalatora w wersji $WERSJA pobrane"
 
@@ -433,7 +442,7 @@ tryby_jak_wzor() {
 #   folderem, przenosi do kopii w całości.
 # - Gdy cel różni się od nowego wzoru albo ma innego właściciela niż root:root lub inne tryby (tryby_jak_wzor), kładzie
 #   wzór obok celu i podmienia go dwoma mv, a stare drzewo usuwa (jego zmienione pliki są już w kopii). Przed podmianą
-#   $ZESTAW albo $ZARZADZANE przerywa instalator, gdy konto fabryka ma proces autopilota z zestawu albo gdy pgrep
+#   $ZESTAW albo $ZARZADZANE przerywa instalator, gdy konto factory ma proces autopilota z zestawu albo gdy pgrep
 #   nie odpowiada (kod inny niż 0 i 1).
 # - Na końcu zapisuje listę sum nowego wzoru. DRZEWO_ZMIENIONE=1, gdy cel się zmienił, inaczej 0.
 drzewo_roota() {
@@ -462,11 +471,11 @@ drzewo_roota() {
   fi
   if [ "$podmiana" = 1 ] && { [ "$cel" = "$ZESTAW" ] || [ "$cel" = "${ZARZADZANE-}" ]; }; then
     kod_pgrep=0
-    pgrep -u fabryka -f "$ZESTAW/scripts/autopilot.py" > /dev/null 2>&1 || kod_pgrep=$?
+    pgrep -u factory -f "$ZESTAW/scripts/autopilot.py" > /dev/null 2>&1 || kod_pgrep=$?
     case "$kod_pgrep" in
-      0) przerwij "Konto fabryka ma działający przebieg autopilota z $ZESTAW. Poczekaj na koniec przebiegu i uruchom instalator ponownie; $cel się nie zmienił." ;;
+      0) przerwij "Konto factory ma działający przebieg autopilota z $ZESTAW. Poczekaj na koniec przebiegu i uruchom instalator ponownie; $cel się nie zmienił." ;;
       1) ;;
-      *) przerwij "Nie mogę sprawdzić, czy konto fabryka ma działający przebieg autopilota (pgrep, kod $kod_pgrep); $cel się nie zmienił." ;;
+      *) przerwij "Nie mogę sprawdzić, czy konto factory ma działający przebieg autopilota (pgrep, kod $kod_pgrep); $cel się nie zmienił." ;;
     esac
   fi
   if [ "$obcy" = 1 ]; then
@@ -524,14 +533,14 @@ drzewo_roota() {
   zainstaluj_plik "$nowe" "$lista" 0600 || true
 }
 
-# wzor_serwera <folder>: wzór drzewa $LIB z pobranych plików: start-fabryki.sh, skrzynka.py, start-maestro.sh,
+# wzor_serwera <folder>: wzór drzewa $LIB z pobranych plików: start-factory.sh, skrzynka.py, start-maestro.sh,
 # umowa Maestro maestro/CLAUDE.md (w trybie autora umowa i dodatek autora maestro/CLAUDE-autor.md sklejone w jeden
 # plik, z pustą linią między nimi) i narzędzia Maestro maestro/narzedzia/{wyslij.sh,porzadki-notatek.sh}. Skrypty
 # i narzędzia mają tryb 0755, umowa 0644.
 wzor_serwera() {
   local wzor="$1" plik
   mkdir -p -- "$wzor/maestro/narzedzia" || przerwij "Nie mogę założyć wzoru plików serwera $wzor."
-  for plik in start-fabryki.sh skrzynka.py start-maestro.sh maestro/narzedzia/wyslij.sh \
+  for plik in start-factory.sh skrzynka.py start-maestro.sh maestro/narzedzia/wyslij.sh \
     maestro/narzedzia/porzadki-notatek.sh; do
     cp -- "$POBRANE/$plik" "$wzor/$plik" || przerwij "Nie mogę położyć $plik we wzorze plików serwera."
     chmod 0755 "$wzor/$plik" || przerwij "Nie mogę ustawić trybu $plik we wzorze plików serwera."
@@ -553,9 +562,18 @@ w_grupie() {
   return 1
 }
 
-# dopisz_blok <konto> <plik konta> <znacznik> <treść>: dopisuje blok raz, z konta właściciela.
+# dopisz_blok <konto> <plik konta> <znacznik> <treść>: dopisuje blok raz, z konta właściciela. Linię starego znacznika
+# (STARY_ZNACZNIK_POWLOKI z tą samą resztą co <znacznik>) zastępuje w miejscu nowym znacznikiem, a nie dopisuje
+# drugiego bloku: treść bloków nie zależy od nazwy konta. Plik czyta i zapisuje konto, zmiana idzie w $TMP.
 dopisz_blok() {
+  local stary="$STARY_ZNACZNIK_POWLOKI${3#*:}"
   if sudo -u "$1" grep -qF "$3" "$2" 2> /dev/null; then
+    return 0
+  fi
+  if sudo -u "$1" grep -qxF "$stary" "$2" 2> /dev/null; then
+    sudo -u "$1" cat -- "$2" > "$TMP/powloka"
+    awk -v stary="$stary" -v nowy="$3" '$0 == stary { print nowy; next } { print }' "$TMP/powloka" > "$TMP/powloka.nowa"
+    sudo -u "$1" tee -- "$2" < "$TMP/powloka.nowa" > /dev/null
     return 0
   fi
   printf '\n%s\n%s\n' "$3" "$4" | sudo -u "$1" tee -a "$2" > /dev/null
@@ -564,11 +582,11 @@ dopisz_blok() {
 # zakres_podrzedny <plik /etc/subuid albo /etc/subgid> <opcja usermod>: co najmniej 65 536 identyfikatorów.
 zakres_podrzedny() {
   local start
-  if awk -F: '$1 == "fabryka" && $3 >= 65536 { ok = 1 } END { exit !ok }' "$1"; then
+  if awk -F: '$1 == "factory" && $3 >= 65536 { ok = 1 } END { exit !ok }' "$1"; then
     return 0
   fi
   start=$(awk -F: 'BEGIN { m = 100000 } { e = $2 + $3; if (e > m) m = e } END { print m }' "$1")
-  usermod "$2" "$start-$((start + 65535))" fabryka
+  usermod "$2" "$start-$((start + 65535))" factory
 }
 
 # --- 1. pakiety --------------------------------------------------------------------------------------------
@@ -605,7 +623,7 @@ apt-get "${APT_CZEKAJ[@]}" update -q
 apt-get "${APT_CZEKAJ[@]}" install -y -q gh docker-ce docker-ce-cli containerd.io docker-ce-rootless-extras \
   docker-buildx-plugin docker-compose-plugin
 
-# Demon Dockera roota jest wyłączony: fabryka używa tylko Dockera bez roota.
+# Demon Dockera roota jest wyłączony: factory używa tylko Dockera bez roota.
 systemctl disable --now docker.service docker.socket > /dev/null 2>&1 || true
 rm -f /var/run/docker.sock
 gotowe "pakiety, GitHub CLI i Docker zainstalowane; demon Dockera roota wyłączony"
@@ -632,8 +650,8 @@ else
 fi
 
 # mise: binarka z wydania na GitHubie, suma SHA-256 sprawdzona przed instalacją; tylko amd64 (suma dotyczy linux-x64).
-# Instalator niczego nie odinstalowuje i nie wybiera żadnego języka: dane mise konto fabryka zakłada samo
-# przy pierwszym użyciu, a wersję języka zapisuje krok fabryki w folderze projektu.
+# Instalator niczego nie odinstalowuje i nie wybiera żadnego języka: dane mise konto factory zakłada samo
+# przy pierwszym użyciu, a wersję języka zapisuje krok Factory w folderze projektu.
 if [ "$ARCH" = "amd64" ]; then
   if /usr/local/bin/mise --version 2> /dev/null | grep -qF "$MISE_WERSJA"; then
     gotowe "mise $MISE_WERSJA już jest"
@@ -654,8 +672,8 @@ fi
 
 # --- 2. konta, grupy i reguła sudo -------------------------------------------------------------------------
 
-etap 2 "Konta maestro i fabryka"
-for konto in fabryka maestro; do
+etap 2 "Konta maestro i factory"
+for konto in factory maestro; do
   if id -u "$konto" > /dev/null 2>&1; then
     gotowe "konto $konto już jest"
   else
@@ -664,31 +682,31 @@ for konto in fabryka maestro; do
   fi
 done
 
-# Fabryka nie widzi Maestro; Maestro czyta pliki fabryki przez grupę fabryka.
+# Factory nie widzi Maestro; Maestro czyta pliki Factory przez grupę factory.
 chmod 0700 "$OBS_HOME"
 chmod 0750 "$FAB_HOME"
-if ! w_grupie maestro fabryka; then
-  usermod -aG fabryka maestro
+if ! w_grupie maestro factory; then
+  usermod -aG factory maestro
 fi
 for grupa in sudo docker; do
-  if w_grupie fabryka "$grupa"; then
-    gpasswd -d fabryka "$grupa" > /dev/null
-    napisz "  usunięto konto fabryka z grupy $grupa"
+  if w_grupie factory "$grupa"; then
+    gpasswd -d factory "$grupa" > /dev/null
+    napisz "  usunięto konto factory z grupy $grupa"
   fi
 done
 zakres_podrzedny /etc/subuid --add-subuids
 zakres_podrzedny /etc/subgid --add-subgids
-# umask 022 kont fabryka i maestro w jednym miejscu: pam_umask czyta "umask=" z pola GECOS przed
+# umask 022 kont factory i maestro w jednym miejscu: pam_umask czyta "umask=" z pola GECOS przed
 # ustawieniami z /etc/login.defs (USERGROUPS_ENAB daje 002), więc każda sesja PAM konta (sudo -u, menedżer
-# użytkownika, logowanie) tworzy pliki bez zapisu dla grupy. Fabryka nie daje zapisu grupie fabryka,
-# w której jest maestro; maestro nie daje grupie fabryka zapisu w skrzynce.
-for konto in fabryka maestro; do
+# użytkownika, logowanie) tworzy pliki bez zapisu dla grupy. Factory nie daje zapisu grupie factory,
+# w której jest maestro; maestro nie daje grupie factory zapisu w skrzynce.
+for konto in factory maestro; do
   case "$(getent passwd "$konto" | cut -d: -f5)" in
     *umask=022*) ;;
     *) chfn -o umask=022 "$konto" ;;
   esac
 done
-gotowe "tryby katalogów domowych, grupy, umask kont fabryka i maestro i zakresy podrzędnych identyfikatorów ustawione"
+gotowe "tryby katalogów domowych, grupy, umask kont factory i maestro i zakresy podrzędnych identyfikatorów ustawione"
 
 if ! visudo -c -f "$POBRANE/sudoers-maestro" > /dev/null; then
   przerwij "Reguła sudo Maestro nie przechodzi visudo -c -f."
@@ -705,13 +723,13 @@ folder_systemu() {
   chown "$2" "$1" || przerwij "Nie mogę ustawić właściciela $1."
   chmod "$3" "$1" || przerwij "Nie mogę ustawić trybu $1."
 }
-# Skrzynkę pisze tylko maestro, a fabryka czyta przez grupę (setgid: nowe pliki dostają grupę fabryka).
-# Wyniki pisze tylko fabryka, a maestro czyta przez grupę fabryka.
+# Skrzynkę pisze tylko maestro, a factory czyta przez grupę (setgid: nowe pliki dostają grupę factory).
+# Wyniki pisze tylko factory, a maestro czyta przez grupę factory.
 folder_systemu "$SERWER" root:root 0755
-folder_systemu "$SKRZYNKA" maestro:fabryka 2750
-folder_systemu "$WYNIKI" fabryka:fabryka 0750
-# Przekazanie: maestro kładzie plik, fabryka czyta go i usuwa (grupa fabryka z zapisem, setgid, bez bitu sticky).
-folder_systemu "$PRZEKAZANIE" maestro:fabryka 2770
+folder_systemu "$SKRZYNKA" maestro:factory 2750
+folder_systemu "$WYNIKI" factory:factory 0750
+# Przekazanie: maestro kładzie plik, factory czyta go i usuwa (grupa factory z zapisem, setgid, bez bitu sticky).
+folder_systemu "$PRZEKAZANIE" maestro:factory 2770
 gotowe "foldery $SKRZYNKA, $WYNIKI i $PRZEKAZANIE założone"
 # Folder z v1.0.4, którego od v1.0.5 nie ma: zgody zapisuje autopilot jak na Macu.
 rm -rf --one-file-system -- "$SERWER/zaufane" || przerwij "Nie mogę usunąć folderu $SERWER/zaufane z v1.0.4."
@@ -728,7 +746,7 @@ ZMIANA_SERWERA=$DRZEWO_ZMIENIONE
 # --- 3. Claude Code --------------------------------------------------------------------------------------
 
 etap 3 "Claude Code na obu kontach"
-for konto in maestro fabryka; do
+for konto in maestro factory; do
   if sudo -u "$konto" test -x "/home/$konto/.local/bin/claude"; then
     gotowe "Claude Code na koncie $konto już jest"
   else
@@ -738,28 +756,28 @@ for konto in maestro fabryka; do
 done
 
 BLOK_MAESTRO='export PATH="$HOME/.local/bin:$PATH"'
-BLOK_FABRYKI='export PATH="$HOME/.local/bin:$PATH"
+BLOK_FACTORY='export PATH="$HOME/.local/bin:$PATH"
 umask 022'
 for plik in .profile .bashrc; do
   dopisz_blok maestro "$OBS_HOME/$plik" "$ZNACZNIK_PATH" "$BLOK_MAESTRO"
-  dopisz_blok fabryka "$FAB_HOME/$plik" "$ZNACZNIK_PATH" "$BLOK_FABRYKI"
+  dopisz_blok factory "$FAB_HOME/$plik" "$ZNACZNIK_PATH" "$BLOK_FACTORY"
 done
 gotowe "ścieżka do Claude Code w .profile i .bashrc obu kont"
 
 # --- 4. Docker bez roota ---------------------------------------------------------------------------------
 
-etap 4 "Docker bez roota na koncie fabryka"
-FAB_UID=$(id -u fabryka)
+etap 4 "Docker bez roota na koncie factory"
+FAB_UID=$(id -u factory)
 FAB_RUN="/run/user/$FAB_UID"
 
-# Polecenie konta fabryka z jej sesją systemd (sudo nie daje XDG_RUNTIME_DIR ani D-Bus).
-jako_fabryka_z_sesja() {
-  sudo -u fabryka env "XDG_RUNTIME_DIR=$FAB_RUN" "DBUS_SESSION_BUS_ADDRESS=unix:path=$FAB_RUN/bus" "$@"
+# Polecenie konta factory z jej sesją systemd (sudo nie daje XDG_RUNTIME_DIR ani D-Bus).
+jako_factory_z_sesja() {
+  sudo -u factory env "XDG_RUNTIME_DIR=$FAB_RUN" "DBUS_SESSION_BUS_ADDRESS=unix:path=$FAB_RUN/bus" "$@"
 }
 
-# Polecenie docker konta fabryka (Docker bez roota) z jej sesją.
-docker_fabryki() {
-  jako_fabryka_z_sesja env "DOCKER_HOST=unix://$FAB_RUN/docker.sock" docker "$@"
+# Polecenie docker konta factory (Docker bez roota) z jej sesją.
+docker_factory() {
+  jako_factory_z_sesja env "DOCKER_HOST=unix://$FAB_RUN/docker.sock" docker "$@"
 }
 
 # Ubuntu 24.04+ ogranicza przestrzenie nazw bez profilu AppArmor; profil tylko dla rootlesskit,
@@ -784,7 +802,7 @@ PROFIL
   fi
 fi
 
-loginctl enable-linger fabryka
+loginctl enable-linger factory
 systemctl start "user@$FAB_UID.service"
 for _ in $(seq 1 30); do
   if [ -S "$FAB_RUN/bus" ]; then
@@ -793,27 +811,27 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 if [ ! -S "$FAB_RUN/bus" ]; then
-  przerwij "Sesja systemd konta fabryka nie wystartowała ($FAB_RUN/bus). Uruchom instalator ponownie."
+  przerwij "Sesja systemd konta factory nie wystartowała ($FAB_RUN/bus). Uruchom instalator ponownie."
 fi
 
-if jako_fabryka_z_sesja systemctl --user is-active --quiet docker.service; then
+if jako_factory_z_sesja systemctl --user is-active --quiet docker.service; then
   gotowe "Docker bez roota już działa"
 else
-  jako_fabryka_z_sesja /usr/bin/dockerd-rootless-setuptool.sh install
-  jako_fabryka_z_sesja systemctl --user enable --now docker.service
+  jako_factory_z_sesja /usr/bin/dockerd-rootless-setuptool.sh install
+  jako_factory_z_sesja systemctl --user enable --now docker.service
   gotowe "Docker bez roota uruchomiony"
 fi
 BLOK_DOCKERA="export DOCKER_HOST=unix://$FAB_RUN/docker.sock"
 for plik in .profile .bashrc; do
-  dopisz_blok fabryka "$FAB_HOME/$plik" "$ZNACZNIK_DOCKER" "$BLOK_DOCKERA"
+  dopisz_blok factory "$FAB_HOME/$plik" "$ZNACZNIK_DOCKER" "$BLOK_DOCKERA"
 done
 
-# Przeglądarka do testów aplikacji: obraz pobiera konto fabryka raz; kolejne uruchomienie go nie pobiera.
-if docker_fabryki image inspect "$OBRAZ_PRZEGLADARKI" > /dev/null 2>&1; then
+# Przeglądarka do testów aplikacji: obraz pobiera konto factory raz; kolejne uruchomienie go nie pobiera.
+if docker_factory image inspect "$OBRAZ_PRZEGLADARKI" > /dev/null 2>&1; then
   gotowe "obraz przeglądarki do testów aplikacji już jest"
 else
   napisz "  Pobieram obraz przeglądarki do testów aplikacji: ok. 1 GB pobierania, 3,6 GB na dysku."
-  docker_fabryki pull "$OBRAZ_PRZEGLADARKI" \
+  docker_factory pull "$OBRAZ_PRZEGLADARKI" \
     || przerwij "Nie mogę pobrać obrazu przeglądarki $OBRAZ_PRZEGLADARKI. Sprawdź sieć i wolne miejsce na dysku (df -h), potem uruchom instalator ponownie."
   gotowe "obraz przeglądarki do testów aplikacji pobrany"
 fi
@@ -839,19 +857,19 @@ zaloguj_claude() {
 }
 
 zaloguj_claude maestro "$OBS_CLAUDE" "Claude Maestro"
-zaloguj_claude fabryka "$FAB_CLAUDE" "Claude fabryki"
+zaloguj_claude factory "$FAB_CLAUDE" "Claude Factory"
 
-if sudo -u fabryka gh auth status > /dev/null 2>&1; then
-  gotowe "GitHub fabryki jest zalogowany"
+if sudo -u factory gh auth status > /dev/null 2>&1; then
+  gotowe "GitHub Factory jest zalogowany"
 else
-  napisz "  Zaloguj GitHub fabryki: otwórz github.com/login/device i wpisz kod, który pokaże się niżej."
-  sudo -u fabryka gh auth login --web --git-protocol https --hostname github.com || true
-  if ! sudo -u fabryka gh auth status > /dev/null 2>&1; then
-    przerwij "Logowanie: GitHub fabryki nie jest zalogowany. Uruchom instalator ponownie."
+  napisz "  Zaloguj GitHub Factory: otwórz github.com/login/device i wpisz kod, który pokaże się niżej."
+  sudo -u factory gh auth login --web --git-protocol https --hostname github.com || true
+  if ! sudo -u factory gh auth status > /dev/null 2>&1; then
+    przerwij "Logowanie: GitHub Factory nie jest zalogowany. Uruchom instalator ponownie."
   fi
-  gotowe "GitHub fabryki zalogowany"
+  gotowe "GitHub Factory zalogowany"
 fi
-sudo -u fabryka gh auth setup-git
+sudo -u factory gh auth setup-git
 
 # --- 6. folder Maestro i ustawienia --------------------------------------------------------------------
 
@@ -935,8 +953,8 @@ fi
 # Folder serwera i projektów do odczytu, w trybie autora także laboratorium, a w trybie użytkownika zestaw Factory
 # ($foldery); zapis narzędziami plikowymi tylko w skrzynce, a w projektach i w trybie autora w laboratorium reguła deny
 # dla Edit ($zakazy). Inne wpisy permissions zostają, nowe dochodzą bez duplikatów, a znika każdy wpis z folderem
-# $SERWER/zaufane z v1.0.4, każdy folder konta fabryka spoza $foldery w additionalDirectories (w trybie użytkownika
-# także laboratorium), każda reguła allow z folderem konta fabryka i w trybie użytkownika reguła deny laboratorium.
+# $SERWER/zaufane z v1.0.4, każdy folder konta factory spoza $foldery w additionalDirectories (w trybie użytkownika
+# także laboratorium), każda reguła allow z folderem konta factory i w trybie użytkownika reguła deny laboratorium.
 # Zapis narzędziami plikowymi także w archiwum notatek, bez pytania (umowa, „Pamięć”). Dwa haki uruchamiają
 # sprawdzenie notatek z $LIB/maestro/narzedzia bez duplikatu: SessionStart przy każdym starcie sesji (także
 # wznowieniu i po kompaktowaniu) i UserPromptSubmit z --co-miesiac raz na miesiąc kalendarzowy; polecenia z dawną
@@ -1091,42 +1109,42 @@ gotowe "zadanie retencji włączone (pliki archiwum starsze niż 365 dni; notatk
 
 etap 9 "Pliki Factory"
 
-# skille_laboratorium: nazwy folderów skilli klonu, po jednej w linii (czyta konto fabryka).
+# skille_laboratorium: nazwy folderów skilli klonu, po jednej w linii (czyta konto factory).
 skille_laboratorium() {
-  sudo -u fabryka -H find "$LAB_DIR/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n'
+  sudo -u factory -H find "$LAB_DIR/skills" -mindepth 1 -maxdepth 1 -type d -printf '%f\n'
 }
 
 # skille_zainstalowane: nazwy skilli, które instalator skopiował wcześniej, po jednej w linii: linie zapisu
 # $FAB_SKILLE_ZAPIS; bez zapisu, gdy klon był przed tym uruchomieniem (KLON_BYL=1), nazwy folderów skills/<nazwa>/
-# z historii klonu (instalacje sprzed zapisu); na świeżym klonie nic. Czyta konto fabryka; błąd gita daje kod 1.
+# z historii klonu (instalacje sprzed zapisu); na świeżym klonie nic. Czyta konto factory; błąd gita daje kod 1.
 skille_zainstalowane() {
   local historia
-  if sudo -u fabryka -H test -f "$FAB_SKILLE_ZAPIS"; then
-    sudo -u fabryka -H cat -- "$FAB_SKILLE_ZAPIS"
+  if sudo -u factory -H test -f "$FAB_SKILLE_ZAPIS"; then
+    sudo -u factory -H cat -- "$FAB_SKILLE_ZAPIS"
   elif [ "${KLON_BYL:-0}" = 1 ]; then
-    historia=$(sudo -u fabryka -H git -C "$LAB_DIR" log --format= --name-only -- skills/) || return 1
+    historia=$(sudo -u factory -H git -C "$LAB_DIR" log --format= --name-only -- skills/) || return 1
     printf '%s\n' "$historia" | awk -F/ 'NF > 2 && $1 == "skills" { print $2 }' | sort -u
   fi
 }
 
-# skille_fabryki: folder każdego skilla laboratorium w ~/.claude/skills konta fabryka zastępuje kopia z klonu.
+# skille_factory: folder każdego skilla laboratorium w ~/.claude/skills konta factory zastępuje kopia z klonu.
 # Potem usuwa folder albo dowiązanie każdego skilla ze skille_zainstalowane, którego klon już nie ma, i wypisuje
 # każdy usunięty; nazwa spoza wzoru ^[A-Za-z0-9][A-Za-z0-9._-]*$ (np. z „..” albo „/”) nie jest usuwana. Na końcu
 # zapis $FAB_SKILLE_ZAPIS dostaje nazwy skilli klonu (plik tymczasowy i mv). Usuwanie i zapis tylko wtedy, gdy klon
 # stoi na gałęzi master: gałąź zmiany zatrzymanej przed scaleniem nie usuwa skilla, który master dalej uruchamia.
-# Inne foldery zostają. Kopiuje, usuwa i zapisuje konto fabryka.
-skille_fabryki() {
+# Inne foldery zostają. Kopiuje, usuwa i zapisuje konto factory.
+skille_factory() {
   local lista wczesniej nazwa nowy_zapis galaz
   lista=$(skille_laboratorium) || przerwij "Nie mogę odczytać skilli laboratorium w $LAB_DIR/skills."
   [ -n "$lista" ] || przerwij "Laboratorium nie ma skilli w $LAB_DIR/skills."
   wczesniej=$(skille_zainstalowane) \
     || przerwij "Nie mogę odczytać skilli, które instalator skopiował wcześniej ($FAB_SKILLE_ZAPIS albo historia skills/ w $LAB_DIR)."
-  sudo -u fabryka -H mkdir -p "$FAB_SKILLE"
+  sudo -u factory -H mkdir -p "$FAB_SKILLE"
   while IFS= read -r nazwa; do
-    sudo -u fabryka -H rm -rf -- "$FAB_SKILLE/$nazwa"
-    sudo -u fabryka -H cp -R -- "$LAB_DIR/skills/$nazwa" "$FAB_SKILLE/$nazwa"
+    sudo -u factory -H rm -rf -- "$FAB_SKILLE/$nazwa"
+    sudo -u factory -H cp -R -- "$LAB_DIR/skills/$nazwa" "$FAB_SKILLE/$nazwa"
   done <<< "$lista"
-  galaz=$(sudo -u fabryka -H git -C "$LAB_DIR" symbolic-ref --short -q HEAD) || galaz=""
+  galaz=$(sudo -u factory -H git -C "$LAB_DIR" symbolic-ref --short -q HEAD) || galaz=""
   if [ "$galaz" != master ]; then
     gotowe "skille spoza klonu nie są usuwane: klon laboratorium nie jest na gałęzi master (${galaz:-odłączony HEAD})"
     gotowe "skille laboratorium skopiowane do $FAB_SKILLE"
@@ -1137,20 +1155,20 @@ skille_fabryki() {
     if grep -qxF -- "$nazwa" <<< "$lista"; then
       continue
     fi
-    if sudo -u fabryka -H test -e "$FAB_SKILLE/$nazwa" || sudo -u fabryka -H test -L "$FAB_SKILLE/$nazwa"; then
-      sudo -u fabryka -H rm -rf -- "$FAB_SKILLE/$nazwa"
-      gotowe "usunięty skill $nazwa: fabryka go zainstalowała, a laboratorium go już nie ma"
+    if sudo -u factory -H test -e "$FAB_SKILLE/$nazwa" || sudo -u factory -H test -L "$FAB_SKILLE/$nazwa"; then
+      sudo -u factory -H rm -rf -- "$FAB_SKILLE/$nazwa"
+      gotowe "usunięty skill $nazwa: Factory go zainstalowała, a laboratorium go już nie ma"
     fi
   done <<< "$wczesniej"
-  sudo -u fabryka -H mkdir -p -- "${FAB_SKILLE_ZAPIS%/*}"
-  nowy_zapis=$(sudo -u fabryka -H mktemp -- "$FAB_SKILLE_ZAPIS.XXXXXX") \
+  sudo -u factory -H mkdir -p -- "${FAB_SKILLE_ZAPIS%/*}"
+  nowy_zapis=$(sudo -u factory -H mktemp -- "$FAB_SKILLE_ZAPIS.XXXXXX") \
     || przerwij "Nie mogę zapisać listy skilli w ${FAB_SKILLE_ZAPIS%/*}."
-  printf '%s\n' "$lista" | sudo -u fabryka -H tee -- "$nowy_zapis" > /dev/null
-  sudo -u fabryka -H mv -f -- "$nowy_zapis" "$FAB_SKILLE_ZAPIS"
+  printf '%s\n' "$lista" | sudo -u factory -H tee -- "$nowy_zapis" > /dev/null
+  sudo -u factory -H mv -f -- "$nowy_zapis" "$FAB_SKILLE_ZAPIS"
   gotowe "skille laboratorium skopiowane do $FAB_SKILLE"
 }
 
-# Hak startu sesji konta fabryka w bloku jak w docs/start-projektu.md; inne klucze zostają, bez duplikatu. Polecenie
+# Hak startu sesji konta factory w bloku jak w docs/start-projektu.md; inne klucze zostają, bez duplikatu. Polecenie
 # haka z folderu Factory drugiego trybu ($stary) znika, a blok, który miał tylko je, znika razem z nim.
 WARUNEK_HAKA='any(.hooks.SessionStart[]?.hooks[]?; .type == "command" and .command == $polecenie)
   and (any(.hooks.SessionStart[]?.hooks[]?; .type == "command" and .command == $stary) | not)'
@@ -1162,55 +1180,55 @@ FILTR_HAKA='.hooks = (.hooks // {})
       | if any($s[]?.hooks[]?; .type == "command" and .command == $polecenie) then $s
         else $s + [{hooks: [{type: "command", command: $polecenie}]}] end)'
 
-# ustawienia_fabryki: hak startu sesji z folderu Factory trybu (HAK_FABRYKI) w ~/.claude/settings.json konta fabryka
+# ustawienia_factory: hak startu sesji z folderu Factory trybu (HAK_FACTORY) w ~/.claude/settings.json konta factory
 # (pusty {}, gdy pliku nie ma), bez polecenia haka drugiego trybu (HAK_INNEGO_TRYBU); niepoprawny JSON przerywa
 # instalator.
-ustawienia_fabryki() {
-  sudo -u fabryka -H mkdir -p "$FAB_HOME/.claude"
-  if ! sudo -u fabryka -H test -s "$FAB_SETTINGS"; then
-    printf '{}\n' | sudo -u fabryka -H tee "$FAB_SETTINGS" > /dev/null
+ustawienia_factory() {
+  sudo -u factory -H mkdir -p "$FAB_HOME/.claude"
+  if ! sudo -u factory -H test -s "$FAB_SETTINGS"; then
+    printf '{}\n' | sudo -u factory -H tee "$FAB_SETTINGS" > /dev/null
   fi
-  if sudo -u fabryka -H jq -e --arg polecenie "$HAK_FABRYKI" --arg stary "$HAK_INNEGO_TRYBU" "$WARUNEK_HAKA" \
+  if sudo -u factory -H jq -e --arg polecenie "$HAK_FACTORY" --arg stary "$HAK_INNEGO_TRYBU" "$WARUNEK_HAKA" \
     "$FAB_SETTINGS" > /dev/null 2>&1; then
-    gotowe "hak startu sesji w ustawieniach Claude Code konta fabryka już jest"
+    gotowe "hak startu sesji w ustawieniach Claude Code konta factory już jest"
     return 0
   fi
-  if ! sudo -u fabryka -H jq --arg polecenie "$HAK_FABRYKI" --arg stary "$HAK_INNEGO_TRYBU" "$FILTR_HAKA" \
-    "$FAB_SETTINGS" > "$TMP/settings-fabryki.json"; then
-    przerwij "Ustawienia Claude Code konta fabryka (.claude/settings.json) nie są poprawnym JSON-em."
+  if ! sudo -u factory -H jq --arg polecenie "$HAK_FACTORY" --arg stary "$HAK_INNEGO_TRYBU" "$FILTR_HAKA" \
+    "$FAB_SETTINGS" > "$TMP/settings-factory.json"; then
+    przerwij "Ustawienia Claude Code konta factory (.claude/settings.json) nie są poprawnym JSON-em."
   fi
-  sudo -u fabryka -H tee "$FAB_SETTINGS" < "$TMP/settings-fabryki.json" > /dev/null
-  gotowe "hak startu sesji z $FOLDER_FABRYKI w ustawieniach Claude Code konta fabryka (inne klucze bez zmian)"
+  sudo -u factory -H tee "$FAB_SETTINGS" < "$TMP/settings-factory.json" > /dev/null
+  gotowe "hak startu sesji z $FOLDER_FACTORY w ustawieniach Claude Code konta factory (inne klucze bez zmian)"
 }
 
-# przejscie_skilli_fabryki: tryb użytkownika. Konto fabryka przenosi każdy skill ze skille_zainstalowane (zapis
+# przejscie_skilli_factory: tryb użytkownika. Konto factory przenosi każdy skill ze skille_zainstalowane (zapis
 # $FAB_SKILLE_ZAPIS, a bez zapisu historia skills/ klonu sprzed tego uruchomienia) z ~/.claude/skills do
-# ~/.local/state/fabryka/skille-przed-instalatorem-$CZAS/, bo skille Factory są już w $ZARZADZANE, a kopia w folderze
+# ~/.local/state/factory/skille-przed-instalatorem-$CZAS/, bo skille Factory są już w $ZARZADZANE, a kopia w folderze
 # skilli dalej byłaby skillem. Potem usuwa zapis. Nazwa spoza wzoru ^[A-Za-z0-9][A-Za-z0-9._-]*$ zostaje; inne foldery
 # skilli, projekty i klon zostają.
-przejscie_skilli_fabryki() {
-  local nazwy nazwa kopia="$FAB_HOME/.local/state/fabryka/skille-przed-instalatorem-$CZAS" przeniesione=0
+przejscie_skilli_factory() {
+  local nazwy nazwa kopia="$FAB_HOME/.local/state/factory/skille-przed-instalatorem-$CZAS" przeniesione=0
   nazwy=$(skille_zainstalowane) \
     || przerwij "Nie mogę odczytać skilli, które instalator skopiował wcześniej ($FAB_SKILLE_ZAPIS albo historia skills/ w $LAB_DIR)."
   while IFS= read -r nazwa; do
     [[ "$nazwa" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || continue
-    if sudo -u fabryka -H test -e "$FAB_SKILLE/$nazwa" || sudo -u fabryka -H test -L "$FAB_SKILLE/$nazwa"; then
+    if sudo -u factory -H test -e "$FAB_SKILLE/$nazwa" || sudo -u factory -H test -L "$FAB_SKILLE/$nazwa"; then
       if [ "$przeniesione" = 0 ]; then
-        sudo -u fabryka -H mkdir -p -- "$kopia"
+        sudo -u factory -H mkdir -p -- "$kopia"
       fi
-      sudo -u fabryka -H mv -- "$FAB_SKILLE/$nazwa" "$kopia/$nazwa" \
-        || przerwij "Konto fabryka nie może przenieść skilla $FAB_SKILLE/$nazwa do $kopia."
+      sudo -u factory -H mv -- "$FAB_SKILLE/$nazwa" "$kopia/$nazwa" \
+        || przerwij "Konto factory nie może przenieść skilla $FAB_SKILLE/$nazwa do $kopia."
       przeniesione=1
       gotowe "kopia skilla Factory $nazwa przeniesiona z $FAB_SKILLE do $kopia"
     fi
   done <<< "$nazwy"
-  sudo -u fabryka -H rm -f -- "$FAB_SKILLE_ZAPIS"
+  sudo -u factory -H rm -f -- "$FAB_SKILLE_ZAPIS"
 }
 
-# zestaw_fabryki: tryb użytkownika. Wzór zestawu to archiwum rozpakowane w $TMP/zestaw przed pobraniem plików: z wydania
+# zestaw_factory: tryb użytkownika. Wzór zestawu to archiwum rozpakowane w $TMP/zestaw przed pobraniem plików: z wydania
 # WERSJA (archiwum_z_wydania) albo z --zestaw (archiwum_z_opcji). drzewo_roota kładzie zestaw w $ZESTAW i skille zestawu
 # ze skillem porzadki-notatek Maestro z pobranych plików w $ZARZADZANE.
-zestaw_fabryki() {
+zestaw_factory() {
   [ -d "$TMP/zestaw/skills" ] || przerwij "Zestaw Factory nie ma folderu skills."
   [ ! -e "$TMP/zestaw/skills/porzadki-notatek" ] || przerwij "Zestaw Factory ma skill porzadki-notatek, który jest skillem Maestro."
   mkdir -p -- "$TMP/zarzadzane/porzadki-notatek"
@@ -1222,77 +1240,77 @@ zestaw_fabryki() {
   gotowe "zestaw Factory $(head -n 1 -- "$ZESTAW/WERSJA") w $ZESTAW, skille Factory w $ZARZADZANE"
 }
 
-# tozsamosc_gita: gdy konto fabryka nie ma globalnej tożsamości gita (user.name), ustawia ją: w trybie autora z lokalnej
-# konfiguracji klonu laboratorium, w trybie użytkownika z konta GitHub fabryki (login i adres
-# <id>+<login>@users.noreply.github.com). Bez źródła wypisuje uwagę i nic nie zmienia. Czyta i zapisuje konto fabryka.
+# tozsamosc_gita: gdy konto factory nie ma globalnej tożsamości gita (user.name), ustawia ją: w trybie autora z lokalnej
+# konfiguracji klonu laboratorium, w trybie użytkownika z konta GitHub Factory (login i adres
+# <id>+<login>@users.noreply.github.com). Bez źródła wypisuje uwagę i nic nie zmienia. Czyta i zapisuje konto factory.
 tozsamosc_gita() {
   local nazwa="" adres="" konto=""
-  if [ -n "$(sudo -u fabryka -H git config --global user.name 2> /dev/null || true)" ]; then
-    gotowe "globalna tożsamość gita konta fabryka już jest"
+  if [ -n "$(sudo -u factory -H git config --global user.name 2> /dev/null || true)" ]; then
+    gotowe "globalna tożsamość gita konta factory już jest"
     return 0
   fi
   if [ "$TRYB" = autor ]; then
-    nazwa=$(sudo -u fabryka -H git -C "$LAB_DIR" config --local user.name 2> /dev/null) || nazwa=""
-    adres=$(sudo -u fabryka -H git -C "$LAB_DIR" config --local user.email 2> /dev/null) || adres=""
+    nazwa=$(sudo -u factory -H git -C "$LAB_DIR" config --local user.name 2> /dev/null) || nazwa=""
+    adres=$(sudo -u factory -H git -C "$LAB_DIR" config --local user.email 2> /dev/null) || adres=""
   else
-    konto=$(sudo -u fabryka -H gh api user --jq '"\(.id) \(.login)"' 2> /dev/null) || konto=""
+    konto=$(sudo -u factory -H gh api user --jq '"\(.id) \(.login)"' 2> /dev/null) || konto=""
     if [[ "$konto" =~ ^([0-9]+)\ ([A-Za-z0-9-]+)$ ]]; then
       nazwa="${BASH_REMATCH[2]}"
       adres="${BASH_REMATCH[1]}+${BASH_REMATCH[2]}@users.noreply.github.com"
     fi
   fi
   if [ -z "$nazwa" ] || [ -z "$adres" ]; then
-    napisz "  Uwaga: konto fabryka nie ma globalnej tożsamości gita i nie mam jej źródła; ustaw ją: sudo -u fabryka -H git config --global user.name <nazwa> i user.email <adres>."
+    napisz "  Uwaga: konto factory nie ma globalnej tożsamości gita i nie mam jej źródła; ustaw ją: sudo -u factory -H git config --global user.name <nazwa> i user.email <adres>."
     return 0
   fi
-  sudo -u fabryka -H git config --global user.name "$nazwa"
-  sudo -u fabryka -H git config --global user.email "$adres"
-  gotowe "globalna tożsamość gita konta fabryka ustawiona ($nazwa)"
+  sudo -u factory -H git config --global user.name "$nazwa"
+  sudo -u factory -H git config --global user.email "$adres"
+  gotowe "globalna tożsamość gita konta factory ustawiona ($nazwa)"
 }
 
 if [ "$TRYB" = autor ]; then
-  if sudo -u fabryka test -d "$LAB_DIR/.git"; then
+  if sudo -u factory test -d "$LAB_DIR/.git"; then
     KLON_BYL=1
     gotowe "klon laboratorium już jest (bez pobierania zmian)"
   else
     KLON_BYL=0
-    if [ -z "${FABRYKA_REPO:-}" ]; then
-      LOGIN_GITHUB=$(sudo -u fabryka gh api user --jq .login)
-      FABRYKA_REPO="$LOGIN_GITHUB/fabryka"
+    if [ -z "${LAB_REPO:-}" ]; then
+      LOGIN_GITHUB=$(sudo -u factory gh api user --jq .login)
+      LAB_REPO="$LOGIN_GITHUB/fabryka"
     fi
-    if ! sudo -u fabryka gh repo view "$FABRYKA_REPO" > /dev/null 2>&1; then
-      napisz "  Nie widzę repozytorium $FABRYKA_REPO na koncie GitHub fabryki."
-      read -r -p "  Podaj repozytorium laboratorium (właściciel/nazwa): " FABRYKA_REPO || true
-      if ! sudo -u fabryka gh repo view "$FABRYKA_REPO" > /dev/null 2>&1; then
-        przerwij "Repozytorium $FABRYKA_REPO nie jest dostępne dla konta GitHub fabryki."
+    if ! sudo -u factory gh repo view "$LAB_REPO" > /dev/null 2>&1; then
+      napisz "  Nie widzę repozytorium $LAB_REPO na koncie GitHub Factory."
+      read -r -p "  Podaj repozytorium laboratorium (właściciel/nazwa): " LAB_REPO || true
+      if ! sudo -u factory gh repo view "$LAB_REPO" > /dev/null 2>&1; then
+        przerwij "Repozytorium $LAB_REPO nie jest dostępne dla konta GitHub Factory."
       fi
     fi
-    sudo -u fabryka git clone "https://github.com/${FABRYKA_REPO}.git" "$LAB_DIR"
-    gotowe "laboratorium sklonowane z $FABRYKA_REPO"
+    sudo -u factory git clone "https://github.com/${LAB_REPO}.git" "$LAB_DIR"
+    gotowe "laboratorium sklonowane z $LAB_REPO"
   fi
   if [ -n "$ZESTAW_PLIK" ]; then
     napisz "  Uwaga: w trybie autora Factory działa z klonu laboratorium; archiwum zestawu $ZESTAW_PLIK nie jest kładzione."
   fi
-  skille_fabryki
+  skille_factory
 else
-  if sudo -u fabryka test -d "$LAB_DIR/.git"; then
+  if sudo -u factory test -d "$LAB_DIR/.git"; then
     KLON_BYL=1
   else
     KLON_BYL=0
   fi
-  zestaw_fabryki
+  zestaw_factory
   # Etap 7 startuje sesję Maestro przed założeniem $ZARZADZANE (ze skillem porzadki-notatek), a działająca sesja
   # nie widzi folderu skilli, którego nie było przy jej starcie: zmiana drzewa $ZARZADZANE restartuje sesję.
   if [ "$DRZEWO_ZMIENIONE" -eq 1 ] && systemctl is-active --quiet maestro.service; then
     systemctl restart maestro.service || napisz "  Uwaga: usługa maestro.service nie wystartowała; szczegóły na liście sprawdzeń."
   fi
-  przejscie_skilli_fabryki
+  przejscie_skilli_factory
 fi
-ustawienia_fabryki
+ustawienia_factory
 tozsamosc_gita
 
-# Folder projektów aplikacji konta fabryka (maestro czyta go przez grupę fabryka); zakłada go konto fabryka.
-sudo -u fabryka mkdir -p "$FAB_HOME/projekty"
+# Folder projektów aplikacji konta factory (maestro czyta go przez grupę factory); zakłada go konto factory.
+sudo -u factory mkdir -p "$FAB_HOME/projekty"
 gotowe "folder $FAB_HOME/projekty jest"
 
 # --- 10. lista sprawdzeń -----------------------------------------------------------------------------------
@@ -1314,31 +1332,31 @@ sprawdz() {
   fi
 }
 
-fabryka_nie_widzi_maestro() {
-  ! sudo -u fabryka ls "$OBS_HOME" && ! sudo -u fabryka test -w "$OBS_HOME"
+factory_nie_widzi_maestro() {
+  ! sudo -u factory ls "$OBS_HOME" && ! sudo -u factory test -w "$OBS_HOME"
 }
 
 # maestro_czyta_laboratorium: maestro czyta CLAUDE.md folderu Factory trybu (klon laboratorium w trybie autora,
 # zestaw w trybie użytkownika) i folder projektów.
 maestro_czyta_laboratorium() {
-  sudo -u maestro cat "$FOLDER_FABRYKI/CLAUDE.md" > /dev/null && sudo -u maestro ls "$FAB_HOME/projekty" > /dev/null
+  sudo -u maestro cat "$FOLDER_FACTORY/CLAUDE.md" > /dev/null && sudo -u maestro ls "$FAB_HOME/projekty" > /dev/null
 }
 
 regula_sudo_maestro() {
   local wynik reguly
   wynik=$(sudo -l -U maestro 2>&1) || return 1
   reguly=$(printf '%s\n' "$wynik" | grep -E '^[[:space:]]+\(' | sed 's/^[[:space:]]*//') || return 1
-  [ "$reguly" = "(fabryka) NOPASSWD: $LIB/start-fabryki.sh" ]
+  [ "$reguly" = "(factory) NOPASSWD: $LIB/start-factory.sh" ]
 }
 
 maestro_bez_pelnego_sudo() {
   ! sudo -u maestro sudo -n true
 }
 
-fabryka_bez_sudo() {
+factory_bez_sudo() {
   local wynik
   # Dodatni sygnał: błąd sudo -l albo nieznany format wyjścia to "nie działa", a nie "działa".
-  wynik=$(LC_ALL=C sudo -l -U fabryka 2>&1 || true)
+  wynik=$(LC_ALL=C sudo -l -U factory 2>&1 || true)
   case "$wynik" in
     *"is not allowed to run sudo"*) ;;
     *) return 1 ;;
@@ -1356,12 +1374,12 @@ remote_control_maestro() {
 }
 
 grupy_kont() {
-  ! w_grupie fabryka sudo && ! w_grupie fabryka docker && w_grupie maestro fabryka
+  ! w_grupie factory sudo && ! w_grupie factory docker && w_grupie maestro factory
 }
 
 docker_bez_roota() {
   local opcje
-  opcje=$(jako_fabryka_z_sesja env "DOCKER_HOST=unix://$FAB_RUN/docker.sock" docker info --format '{{.SecurityOptions}}') \
+  opcje=$(jako_factory_z_sesja env "DOCKER_HOST=unix://$FAB_RUN/docker.sock" docker info --format '{{.SecurityOptions}}') \
     || return 1
   case "$opcje" in
     *rootless*) return 0 ;;
@@ -1369,38 +1387,38 @@ docker_bez_roota() {
   return 1
 }
 
-# przegladarka_testow: dodatni sygnał; konto fabryka zapisuje próbny plik w swoim folderze tymczasowym w /tmp,
+# przegladarka_testow: dodatni sygnał; konto factory zapisuje próbny plik w swoim folderze tymczasowym w /tmp,
 # a kontener obrazu przeglądarki bez sieci otwiera go z dysku z parametrem w adresie: --dump-dom ma tekst parametru,
-# a --screenshot daje plik PNG. Folder sprząta konto fabryka; root nie otwiera ścieżek pod /home.
+# a --screenshot daje plik PNG. Folder sprząta konto factory; root nie otwiera ścieżek pod /home.
 przegladarka_testow() {
   local folder dom naglowek wynik=1
-  folder=$(sudo -u fabryka mktemp -d /tmp/fabryka-przegladarka.XXXXXX) || return 1
-  if printf '%s' "$PROBA_PRZEGLADARKI" | sudo -u fabryka tee "$folder/proba.html" > /dev/null \
-    && dom=$(docker_fabryki run --rm --network none -v "$folder:/m:ro" "$OBRAZ_PRZEGLADARKI" "$PRZEGLADARKA" \
+  folder=$(sudo -u factory mktemp -d /tmp/factory-przegladarka.XXXXXX) || return 1
+  if printf '%s' "$PROBA_PRZEGLADARKI" | sudo -u factory tee "$folder/proba.html" > /dev/null \
+    && dom=$(docker_factory run --rm --network none -v "$folder:/m:ro" "$OBRAZ_PRZEGLADARKI" "$PRZEGLADARKA" \
       --no-sandbox --dump-dom 'file:///m/proba.html?state=proba') \
-    && docker_fabryki run --rm --network none -v "$folder:/m" "$OBRAZ_PRZEGLADARKI" "$PRZEGLADARKA" \
+    && docker_factory run --rm --network none -v "$folder:/m" "$OBRAZ_PRZEGLADARKI" "$PRZEGLADARKA" \
       --no-sandbox --hide-scrollbars --window-size=1280,800 --screenshot=/m/proba.png 'file:///m/proba.html?state=proba' \
-    && naglowek=$(sudo -u fabryka head -c 8 "$folder/proba.png" | od -An -tx1 | tr -d ' \n'); then
+    && naglowek=$(sudo -u factory head -c 8 "$folder/proba.png" | od -An -tx1 | tr -d ' \n'); then
     case "$dom" in
       *"<body>proba</body>"*) [ "$naglowek" = "89504e470d0a1a0a" ] && wynik=0 ;;
     esac
   fi
-  sudo -u fabryka rm -rf -- "$folder"
+  sudo -u factory rm -rf -- "$folder"
   return "$wynik"
 }
 
 klon_laboratorium() {
-  sudo -u fabryka git -C "$LAB_DIR" status --porcelain > /dev/null
+  sudo -u factory git -C "$LAB_DIR" status --porcelain > /dev/null
 }
 
-# skille_fabryki_rowne_klonowi: dodatni sygnał; kod 0 tylko, gdy klon ma skille i folder każdego z nich
-# w ~/.claude/skills konta fabryka ma tę samą treść.
-skille_fabryki_rowne_klonowi() {
+# skille_factory_rowne_klonowi: dodatni sygnał; kod 0 tylko, gdy klon ma skille i folder każdego z nich
+# w ~/.claude/skills konta factory ma tę samą treść.
+skille_factory_rowne_klonowi() {
   local lista nazwa
   lista=$(skille_laboratorium) || return 1
   [ -n "$lista" ] || return 1
   while IFS= read -r nazwa; do
-    sudo -u fabryka -H diff -r -q -- "$LAB_DIR/skills/$nazwa" "$FAB_SKILLE/$nazwa" > /dev/null || return 1
+    sudo -u factory -H diff -r -q -- "$LAB_DIR/skills/$nazwa" "$FAB_SKILLE/$nazwa" > /dev/null || return 1
   done <<< "$lista"
 }
 
@@ -1472,8 +1490,8 @@ konto_czyta_zestaw() {
   sudo -u "$1" cat "$ZESTAW/CLAUDE.md" > /dev/null && sudo -u "$1" cat "$skill" > /dev/null
 }
 
-hak_fabryki() {
-  sudo -u fabryka -H jq -e --arg polecenie "$HAK_FABRYKI" --arg stary "$HAK_INNEGO_TRYBU" "$WARUNEK_HAKA" \
+hak_factory() {
+  sudo -u factory -H jq -e --arg polecenie "$HAK_FACTORY" --arg stary "$HAK_INNEGO_TRYBU" "$WARUNEK_HAKA" \
     "$FAB_SETTINGS" > /dev/null
 }
 
@@ -1561,23 +1579,23 @@ ustawienia_maestro() {
     && sudo -u maestro jq -e --arg folder "$OBS_DIR" "$WARUNEK_STANU" "$OBS_STAN" > /dev/null
 }
 
-# tylko_maestro_pisze <folder>: dodatni sygnał czterech warunków. Maestro tworzy plik próbny, fabryka
+# tylko_maestro_pisze <folder>: dodatni sygnał czterech warunków. Maestro tworzy plik próbny, factory
 # nie tworzy nowego pliku, nie dopisuje do próbnego i nie usuwa go, maestro go usuwa. Kod 0 tylko, gdy
-# zachodzą wszystkie cztery; plik, który fabryka wbrew oczekiwaniu zapisała, sprząta root.
+# zachodzą wszystkie cztery; plik, który factory wbrew oczekiwaniu zapisała, sprząta root.
 tylko_maestro_pisze() {
   local folder="$1" wynik=0
-  local probny="$folder/.proba-maestro-$$" nowy="$folder/.proba-fabryki-$$"
+  local probny="$folder/.proba-maestro-$$" nowy="$folder/.proba-factory-$$"
   if ! sudo -u maestro touch "$probny" 2> /dev/null; then
     return 1
   fi
-  if sudo -u fabryka touch "$nowy" 2> /dev/null; then
+  if sudo -u factory touch "$nowy" 2> /dev/null; then
     wynik=1
     rm -f "$nowy"
   fi
-  if sudo -u fabryka tee -a "$probny" < /dev/null > /dev/null 2>&1; then
+  if sudo -u factory tee -a "$probny" < /dev/null > /dev/null 2>&1; then
     wynik=1
   fi
-  sudo -u fabryka rm -f "$probny" 2> /dev/null || true
+  sudo -u factory rm -f "$probny" 2> /dev/null || true
   if ! sudo -u maestro test -e "$probny"; then
     wynik=1
   fi
@@ -1589,26 +1607,26 @@ tylko_maestro_pisze() {
 }
 
 # klucze_maestro: dodatni sygnał; folder kluczy Maestro ma tryb 0700 (czyta go konto maestro), a konto
-# fabryka go nie czyta. Root nie otwiera ścieżek pod /home.
+# factory go nie czyta. Root nie otwiera ścieżek pod /home.
 klucze_maestro() {
   local tryb
   tryb=$(sudo -u maestro stat -c %a "$OBS_DIR/klucze") || return 1
   [ "$tryb" = "700" ] || return 1
-  ! sudo -u fabryka test -r "$OBS_DIR/klucze"
+  ! sudo -u factory test -r "$OBS_DIR/klucze"
 }
 
-# maestro_przekazuje_fabryce <folder>: dodatni sygnał czterech warunków. Folder ma właściciela maestro:fabryka
+# maestro_przekazuje_factory <folder>: dodatni sygnał czterech warunków. Folder ma właściciela maestro:factory
 # i tryb 2770; maestro tworzy plik próbny z umask 027 pod losową nazwą jednym otwarciem, które nie idzie za
-# dowiązaniem (O_CREAT|O_EXCL|O_NOFOLLOW; nazwa nie stoi w argumentach procesu), fabryka go czyta i usuwa, a pliku
+# dowiązaniem (O_CREAT|O_EXCL|O_NOFOLLOW; nazwa nie stoi w argumentach procesu), factory go czyta i usuwa, a pliku
 # potem nie ma. Kod 0 tylko, gdy zachodzą wszystkie cztery; plik, który został po próbie, sprząta root.
-maestro_przekazuje_fabryce() {
+maestro_przekazuje_factory() {
   local folder="$1" wynik=0 prawa probny
   local tworz='import os, secrets, sys
 p = os.path.join(sys.argv[1], ".proba-przekazania-" + secrets.token_hex(8))
 os.close(os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o640))
 print(p)'
   prawa=$(stat -c '%U:%G %a' "$folder") || return 1
-  [ "$prawa" = "maestro:fabryka 2770" ] || return 1
+  [ "$prawa" = "maestro:factory 2770" ] || return 1
   if ! probny=$( (umask 027; sudo -u maestro python3 -I -c "$tworz" "$folder") 2> /dev/null); then
     return 1
   fi
@@ -1616,10 +1634,10 @@ print(p)'
     "$folder"/.proba-przekazania-*) ;;
     *) return 1 ;;
   esac
-  if ! sudo -u fabryka cat "$probny" > /dev/null 2>&1; then
+  if ! sudo -u factory cat "$probny" > /dev/null 2>&1; then
     wynik=1
   fi
-  if ! sudo -u fabryka rm -f "$probny" 2> /dev/null; then
+  if ! sudo -u factory rm -f "$probny" 2> /dev/null; then
     wynik=1
   fi
   if [ -e "$probny" ] || [ -L "$probny" ]; then
@@ -1631,7 +1649,7 @@ print(p)'
 
 # ocena_w_skrzynce <folder> <konto>: dodatni sygnał trzech warunków. Konto maestro zapisuje w folderze plik próbny
 # pod losową nazwą jednym otwarciem, które nie idzie za dowiązaniem, tak jak plik oceny Maestro
-# (ocena-<change-id>.md, zapisany narzędziem Write); konto fabryka otwiera go bez podążania za dowiązaniem i widzi
+# (ocena-<change-id>.md, zapisany narzędziem Write); konto factory otwiera go bez podążania za dowiązaniem i widzi
 # zwykły plik z treścią próby, którego właścicielem jest <konto> (tak sprawdza ocenę ocena_problem w
 # scripts/przebieg_rozmowy.py laboratorium); maestro go potem usuwa. Kod 0 tylko, gdy zachodzą wszystkie trzy;
 # plik, który został po próbie, sprząta root.
@@ -1657,7 +1675,7 @@ sys.exit(0 if stat.S_ISREG(info.st_mode) and info.st_uid == wlasciciel and dane 
     "$folder"/.proba-oceny-*) ;;
     *) return 1 ;;
   esac
-  if ! sudo -u fabryka python3 -I -c "$czytaj" "$probny" "$konto" 2> /dev/null; then
+  if ! sudo -u factory python3 -I -c "$czytaj" "$probny" "$konto" 2> /dev/null; then
     wynik=1
   fi
   if ! sudo -u maestro rm -f "$probny" 2> /dev/null; then
@@ -1672,7 +1690,7 @@ sys.exit(0 if stat.S_ISREG(info.st_mode) and info.st_uid == wlasciciel and dane 
 
 gitleaks_w_wersji_szablonu() {
   local wynik
-  wynik=$(sudo -u fabryka gitleaks version 2>&1) || return 1
+  wynik=$(sudo -u factory gitleaks version 2>&1) || return 1
   case "$wynik" in
     *"$GITLEAKS_WERSJA"*) return 0 ;;
   esac
@@ -1681,7 +1699,7 @@ gitleaks_w_wersji_szablonu() {
 
 mise_w_wersji_instalatora() {
   local wynik
-  wynik=$(sudo -u fabryka mise --version 2>&1) || return 1
+  wynik=$(sudo -u factory mise --version 2>&1) || return 1
   case "$wynik" in
     *"$MISE_WERSJA"*) return 0 ;;
   esac
@@ -1690,7 +1708,7 @@ mise_w_wersji_instalatora() {
 
 umask_kont() {
   local konto
-  for konto in fabryka maestro; do
+  for konto in factory maestro; do
     case "$(getent passwd "$konto" | cut -d: -f5)" in
       *umask=022*) ;;
       *) return 1 ;;
@@ -1698,33 +1716,33 @@ umask_kont() {
   done
 }
 
-sprawdz "konto fabryka nie czyta i nie zmienia katalogu Maestro" \
-  "tryb 0700 katalogu $OBS_HOME (ls -ld $OBS_HOME)" fabryka_nie_widzi_maestro
+sprawdz "konto factory nie czyta i nie zmienia katalogu Maestro" \
+  "tryb 0700 katalogu $OBS_HOME (ls -ld $OBS_HOME)" factory_nie_widzi_maestro
 sprawdz "Maestro czyta pliki Factory i projektów" \
-  "tryb 0750 katalogu $FAB_HOME, grupę fabryka Maestro (id maestro), plik $FOLDER_FABRYKI/CLAUDE.md i folder $FAB_HOME/projekty" \
+  "tryb 0750 katalogu $FAB_HOME, grupę factory Maestro (id maestro), plik $FOLDER_FACTORY/CLAUDE.md i folder $FAB_HOME/projekty" \
   maestro_czyta_laboratorium
-sprawdz "jedyna reguła sudo Maestro to skrypt startowy fabryki" \
+sprawdz "jedyna reguła sudo Maestro to skrypt startowy Factory" \
   "sudo -l -U maestro i plik $SUDOERS_CEL" regula_sudo_maestro
 sprawdz "Maestro nie ma pełnego sudo" "sudo -l -U maestro" maestro_bez_pelnego_sudo
-sprawdz "konto fabryka nie ma reguł sudo" "sudo -l -U fabryka i pliki w /etc/sudoers.d" fabryka_bez_sudo
-sprawdz "grupy: fabryka poza sudo i docker, maestro w grupie fabryka" "id fabryka i id maestro" grupy_kont
+sprawdz "konto factory nie ma reguł sudo" "sudo -l -U factory i pliki w /etc/sudoers.d" factory_bez_sudo
+sprawdz "grupy: factory poza sudo i docker, maestro w grupie factory" "id factory i id maestro" grupy_kont
 sprawdz "Claude Maestro zalogowany" "uruchom instalator ponownie i zaloguj konto" \
   sudo -u maestro "$OBS_CLAUDE" auth status
-sprawdz "Claude fabryki zalogowany" "uruchom instalator ponownie i zaloguj konto" \
-  sudo -u fabryka "$FAB_CLAUDE" auth status
-sprawdz "GitHub fabryki zalogowany" "sudo -u fabryka gh auth status" sudo -u fabryka gh auth status
-sprawdz "Docker bez roota na koncie fabryka" "systemctl --user status docker na koncie fabryka" docker_bez_roota
+sprawdz "Claude Factory zalogowany" "uruchom instalator ponownie i zaloguj konto" \
+  sudo -u factory "$FAB_CLAUDE" auth status
+sprawdz "GitHub Factory zalogowany" "sudo -u factory gh auth status" sudo -u factory gh auth status
+sprawdz "Docker bez roota na koncie factory" "systemctl --user status docker na koncie factory" docker_bez_roota
 sprawdz "przeglądarka do testów aplikacji otwiera bez sieci próbny plik z parametrem w adresie i robi jego zrzut" \
-  "obraz przeglądarki na koncie fabryka (docker image inspect $OBRAZ_PRZEGLADARKI); uruchom instalator ponownie" \
+  "obraz przeglądarki na koncie factory (docker image inspect $OBRAZ_PRZEGLADARKI); uruchom instalator ponownie" \
   przegladarka_testow
-sprawdz "mise dla konta fabryka ($MISE_WERSJA)" \
-  "sudo -u fabryka mise --version i plik /usr/local/bin/mise" mise_w_wersji_instalatora
+sprawdz "mise dla konta factory ($MISE_WERSJA)" \
+  "sudo -u factory mise --version i plik /usr/local/bin/mise" mise_w_wersji_instalatora
 sprawdz "gitleaks w wersji z szablonu CI ($GITLEAKS_WERSJA)" \
-  "sudo -u fabryka gitleaks version i plik /usr/local/bin/gitleaks" gitleaks_w_wersji_szablonu
+  "sudo -u factory gitleaks version i plik /usr/local/bin/gitleaks" gitleaks_w_wersji_szablonu
 if [ "$TRYB" = autor ]; then
   sprawdz "laboratorium sklonowane" "folder $LAB_DIR" klon_laboratorium
-  sprawdz "skille laboratorium w ~/.claude/skills konta fabryka równe klonowi" \
-    "foldery $LAB_DIR/skills i $FAB_SKILLE (uruchom instalator ponownie)" skille_fabryki_rowne_klonowi
+  sprawdz "skille laboratorium w ~/.claude/skills konta factory równe klonowi" \
+    "foldery $LAB_DIR/skills i $FAB_SKILLE (uruchom instalator ponownie)" skille_factory_rowne_klonowi
 else
   sprawdz "zestaw Factory w $ZESTAW równy wzorowi" "uruchom instalator ponownie (przywróci zestaw)" \
     drzewo_rowne_wzorowi "$ZESTAW" zestaw
@@ -1734,7 +1752,7 @@ else
     "ls -ld $ZESTAW i find $ZESTAW ! -user root" root_bez_zapisu_innych "$ZESTAW"
   sprawdz "skille Factory i ich foldery nadrzędne należą do roota bez zapisu dla grupy i innych" \
     "ls -ld $ZARZADZANE i find $ZARZADZANE ! -user root" root_bez_zapisu_innych "$ZARZADZANE"
-  for konto in fabryka maestro; do
+  for konto in factory maestro; do
     sprawdz "konto $konto nie tworzy, nie zmienia i nie usuwa plików zestawu ani nie zmienia nazwy folderu skilla" \
       "właściciel root i tryby $ZESTAW i $ZARZADZANE (ls -ld)" konto_nie_zmienia_zestawu "$konto"
     sprawdz "konto $konto czyta zestaw Factory i skille Factory" \
@@ -1743,7 +1761,7 @@ else
   sprawdz "w ~/.claude/skills Maestro nie ma skilli autora (${SKILLE_AUTORA[*]})" \
     "folder $OBS_SKILLE (sudo -u maestro ls $OBS_SKILLE); uruchom instalator ponownie" maestro_bez_skilli_autora
 fi
-sprawdz "hak startu sesji z $FOLDER_FABRYKI w ustawieniach Claude Code konta fabryka" "plik $FAB_SETTINGS" hak_fabryki
+sprawdz "hak startu sesji z $FOLDER_FACTORY w ustawieniach Claude Code konta factory" "plik $FAB_SETTINGS" hak_factory
 sprawdz "umowa Maestro równa wzorowi" "plik $LIB/maestro/CLAUDE.md (ls -l)" \
   umowa_rowna_wzorowi
 sprawdz "konto maestro nie zmienia umowy" "właściciel root i tryby $LIB/maestro (ls -ld)" \
@@ -1767,20 +1785,20 @@ sprawdz "zadanie retencji archiwum włączone" "systemctl list-timers maestro-re
   systemctl is-active --quiet maestro-retencja.timer
 sprawdz "proces remote-control Maestro działa i nie czeka na pytanie (y/n)" \
   "sudo -u maestro tmux attach -t maestro (wpisz y, wyjście: Ctrl-b, potem d)" remote_control_maestro
-sprawdz "umask 022 kont fabryka i maestro" "pole GECOS: getent passwd fabryka maestro" umask_kont
-sprawdz "skrzynkę pisze i czyści tylko maestro, fabryka nie zapisuje ani nie usuwa" \
-  "właściciel maestro:fabryka i tryb 2750 folderu $SKRZYNKA (ls -ld $SKRZYNKA)" tylko_maestro_pisze "$SKRZYNKA"
-sprawdz "ocenę Maestro w skrzynce czyta konto fabryka, a jej właścicielem jest maestro" \
-  "właściciel maestro:fabryka i tryb 2750 folderu $SKRZYNKA (ls -ld $SKRZYNKA) i umask 022 Maestro" \
+sprawdz "umask 022 kont factory i maestro" "pole GECOS: getent passwd factory maestro" umask_kont
+sprawdz "skrzynkę pisze i czyści tylko maestro, factory nie zapisuje ani nie usuwa" \
+  "właściciel maestro:factory i tryb 2750 folderu $SKRZYNKA (ls -ld $SKRZYNKA)" tylko_maestro_pisze "$SKRZYNKA"
+sprawdz "ocenę Maestro w skrzynce czyta konto factory, a jej właścicielem jest maestro" \
+  "właściciel maestro:factory i tryb 2750 folderu $SKRZYNKA (ls -ld $SKRZYNKA) i umask 022 Maestro" \
   ocena_w_skrzynce "$SKRZYNKA" maestro
-sprawdz "klucze Maestro 0700, fabryka ich nie czyta" \
+sprawdz "klucze Maestro 0700, factory ich nie czyta" \
   "tryb 0700 folderu $OBS_DIR/klucze (sudo -u maestro ls -ld $OBS_DIR/klucze)" klucze_maestro
-sprawdz "przekazanie: maestro kładzie, fabryka czyta i usuwa" \
-  "właściciel maestro:fabryka i tryb 2770 folderu $PRZEKAZANIE (ls -ld $PRZEKAZANIE)" \
-  maestro_przekazuje_fabryce "$PRZEKAZANIE"
+sprawdz "przekazanie: maestro kładzie, factory czyta i usuwa" \
+  "właściciel maestro:factory i tryb 2770 folderu $PRZEKAZANIE (ls -ld $PRZEKAZANIE)" \
+  maestro_przekazuje_factory "$PRZEKAZANIE"
 sprawdz "folderu $SERWER/zaufane z v1.0.4 nie ma" "ls -ld $SERWER/zaufane" bez_zaufanych
-sprawdz "Maestro uruchamia skrypt startowy fabryki" "plik $SUDOERS_CEL i $LIB/start-fabryki.sh" \
-  sudo -u maestro sudo -n -u fabryka "$LIB/start-fabryki.sh"
+sprawdz "Maestro uruchamia skrypt startowy Factory" "plik $SUDOERS_CEL i $LIB/start-factory.sh" \
+  sudo -u maestro sudo -n -u factory "$LIB/start-factory.sh"
 
 napisz ""
 napisz "Wynik: działa $DZIALA, nie działa $NIE_DZIALA."

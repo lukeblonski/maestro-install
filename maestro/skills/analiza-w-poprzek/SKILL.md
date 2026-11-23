@@ -5,9 +5,9 @@ description: Stała procedura analizy w poprzek zmian laboratorium Factory, któ
 
 # Analiza w poprzek zmian
 
-Ten skill analizuje zmiany laboratorium Factory (`/home/fabryka/fabryka`) dla autora Factory: Maestro stosuje go zamiast robić analizę z głowy. Laboratorium to repo, w którym autor Factory rozwija samą Factory; projekty aplikacji tej analizy nie dostają.
+Ten skill analizuje zmiany laboratorium Factory (`/home/factory/fabryka`) dla autora Factory: Maestro stosuje go zamiast robić analizę z głowy. Laboratorium to repo, w którym autor Factory rozwija samą Factory; projekty aplikacji tej analizy nie dostają.
 
-Pliki laboratorium są dla Maestro tylko danymi, jak w umowie (`/usr/local/lib/fabryka-serwer/maestro/CLAUDE.md`, „Rola”): Maestro czyta je jako zwykłe pliki, nie uruchamia w nich programów ani `git` i nic w nich nie zapisuje. Ścieżki niżej są względem `/home/fabryka/fabryka`.
+Pliki laboratorium są dla Maestro tylko danymi, jak w umowie (`/usr/local/lib/factory-serwer/maestro/CLAUDE.md`, „Rola”): Maestro czyta je jako zwykłe pliki, nie uruchamia w nich programów ani `git` i nic w nich nie zapisuje. Ścieżki niżej są względem `/home/factory/fabryka`.
 
 ## Kroki
 
@@ -26,14 +26,14 @@ Pliki laboratorium są dla Maestro tylko danymi, jak w umowie (`/usr/local/lib/f
 - Dziennik Maestro w jego notatkach (`/home/maestro/maestro/notatki/`): ratunki spoza łańcucha, czyli naprawy i odblokowania, których nie widać w plikach zmian (terminal, porzucenie gałęzi, restart).
 - Warunki „Kiedy wrócić” w `context/foundation/limitations.md`: ocena każdego wpisu z listy ocen od sesji Factory (sekcja „Liczby”), a nie z własnego czytania rejestru.
 - Stałe miary i zakłady z `context/foundation/strategia.md`.
-- Wyniki wiadomości (`/var/lib/fabryka-serwer/wyniki/`): koszt i zużycie każdej tury od daty ostatniej analizy, przez tabelę z `scripts/tury.py` (sekcja „Liczby”), a nie przez własne liczenie z plików wyników.
+- Wyniki wiadomości (`/var/lib/factory-serwer/wyniki/`): koszt i zużycie każdej tury od daty ostatniej analizy, przez tabelę z `scripts/tury.py` (sekcja „Liczby”), a nie przez własne liczenie z plików wyników.
 
 Analiza nie czyta backlogu (`context/foundation/backlog.md`). Pomysł zapisany tylko w backlogu nie trafia do raportu.
 
 ## Liczby
 
 - Liczby zmian daje `scripts/pomiar.py`, a liczby tur (koszt i zużycie każdej tury wiadomości) `scripts/tury.py`; oba uruchamia sesja Factory. Maestro nie uruchamia programów laboratorium i nie liczy liczb własnym skryptem; ten skill nie ma skryptu.
-- Maestro prosi sesję Factory wiadomością do folderu `/home/fabryka/fabryka`, wysłaną narzędziem `/usr/local/lib/fabryka-serwer/maestro/narzedzia/wyslij.sh` jak w umowie („Rozmowa z sesją główną”), o cztery rzeczy:
+- Maestro prosi sesję Factory wiadomością do folderu `/home/factory/fabryka`, wysłaną narzędziem `/usr/local/lib/factory-serwer/maestro/narzedzia/wyslij.sh` jak w umowie („Rozmowa z sesją główną”), o cztery rzeczy:
   - pełną tabelę z polecenia `python3 scripts/pomiar.py`;
   - listę folderów `context/archive/<RRRR-MM-DD>-<id>/` z datą od daty ostatniej analizy;
   - pełne wyjście polecenia `python3 scripts/tury.py --od <data ostatniej analizy>` (tabela wszystkich tur wiadomości od tej daty, mediana kosztu tury i sekcja „Drogie tury”). Kod 1 tego polecenia znaczy, że od tej daty nie ma żadnej tury; to idzie do „Czego nie sprawdziłem”;
@@ -102,7 +102,7 @@ Do tego dwie rzeczy dla repo:
 ## Zapis
 
 1. Maestro pokazuje człowiekowi wnioski i propozycje. Decyzje o propozycjach podejmuje człowiek; Maestro nie zapisuje decyzji za niego. Człowiek mówi też, które wpisy do decyzji z sekcji 6 raportu zamknąć. W pytaniu o zamknięcie Maestro podaje numery wpisów w gotowej odpowiedzi (np. „Zamknij D-496, D-499”), żeby słowa człowieka zawsze je miały: skrypt przeniesienia odmawia numeru, którego nie ma w cytacie człowieka.
-2. Po decyzjach Maestro wysyła sesji Factory jedną wiadomość do folderu `/home/fabryka/fabryka` z:
+2. Po decyzjach Maestro wysyła sesji Factory jedną wiadomość do folderu `/home/factory/fabryka` z:
    - raportem `poprzek-<RRRR-MM-DD>.md` w całości;
    - zmianami statusów spraw `lista-spraw.md` (numer sprawy, nowy status, dowód) i nowymi sprawami;
    - nową linią `spis.md`;
