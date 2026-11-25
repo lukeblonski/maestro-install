@@ -16,10 +16,10 @@ set -euo pipefail
 # użytkownika).
 
 REPO="lukeblonski/maestro-install"
-WERSJA="v1.0.21"
+WERSJA="v1.0.22"
 # Suma SHA-256 pliku zestaw-factory.tar.gz wydania WERSJA, zrobionego przez scripts/zestaw_factory.py z tagu
 # zestaw-<WERSJA> laboratorium; 64 zera do przypięcia przy wydaniu.
-ZESTAW_SUMA="ff58bb8f8c31223dd7ffbd5f2d74eb39d6b6320ed99c4f77937a5052139a4dac"
+ZESTAW_SUMA="713676c9ec0213d7a8ad1b9ad96683bc44cf5708d27a5e9451a6f77b53ab9384"
 
 # gitleaks w wersji z szablonu CI guardrails (skills/guardrails/templates/ci.yml, GITLEAKS_VERSION) i suma SHA-256
 # archiwum linux_x64 z oficjalnego pliku sum tego wydania (gitleaks_8.30.1_checksums.txt).
@@ -71,6 +71,7 @@ PRZEKAZANIE="$SERWER/przekazanie"
 JEDNOSTKI=/etc/systemd/system
 SUDOERS_CEL=/etc/sudoers.d/maestro
 APPARMOR_ROOTLESSKIT=/etc/apparmor.d/usr.bin.rootlesskit
+UFW_KATALOG=/etc/ufw
 LOG=/var/log/factory-instalator.log
 
 # Nazwa konta Maestro w wydaniach do v1.0.19: instalator przy nim staje (konto_pod_stara_nazwa).
@@ -589,6 +590,82 @@ zakres_podrzedny() {
   usermod "$2" "$start-$((start + 65535))" factory
 }
 
+# porty_ssh: każdy port z `sshd -T`, jeden w linii; kod 1 przy błędzie `sshd -T` albo bez portu. Brakujący /run/sshd
+# (ssh.service zakłada go tylko wtedy, gdy działa, a bez niego `sshd -T` kończy się błędem) zakłada jak ssh.service.
+porty_ssh() {
+  local wynik porty
+  if [ ! -d /run/sshd ]; then
+    install -d -m 0755 -o root -g root /run/sshd || return 1
+  fi
+  wynik=$(sshd -T 2> /dev/null) || return 1
+  porty=$(printf '%s\n' "$wynik" | awk '$1 == "port" { print $2 }')
+  [ -n "$porty" ] || return 1
+  printf '%s\n' "$porty"
+}
+
+# regula_portu_w_krotkach: krotka reguły wejścia (`### tuple ###`) w user.rules albo user6.rules zapory ma port $1
+# w polu portu celu: sam, na liście albo w zakresie, dla tcp albo każdego protokołu. `ufw` rozwija tam port profilu
+# (np. OpenSSH), więc to rozpoznaje regułę, której pierwsza kolumna `ufw status` nie podaje jako portu. Kierunek
+# jest ostatnim polem krotki przed opcjonalnym `comment=`.
+regula_portu_w_krotkach() {
+  { cat "$UFW_KATALOG/user.rules" "$UFW_KATALOG/user6.rules" 2> /dev/null || true; } | awk -v p="$1" '
+    $1 == "###" && $2 == "tuple" && $3 == "###" {
+      kierunek = ($NF ~ /^comment=/) ? $(NF - 1) : $NF
+    }
+    $1 == "###" && $2 == "tuple" && $3 == "###" && $4 !~ /^route:/ && ($5 == "tcp" || $5 == "any") &&
+      kierunek ~ /^in(_|$)/ {
+      n = split($6, czesci, ",")
+      for (i = 1; i <= n; i++) {
+        if (split(czesci[i], zakres, ":") == 2) {
+          if (p + 0 >= zakres[1] + 0 && p + 0 <= zakres[2] + 0) jest = 1
+        } else if (czesci[i] == p) {
+          jest = 1
+        }
+      }
+    }
+    END { exit !jest }'
+}
+
+# wlacz_zapore: zapora z wejściem otwartym tylko dla SSH. Wyłączona: domyślne zasady, reguła każdego portu SSH
+# i włączenie na końcu, po regułach, żeby nie odciąć bieżącej sesji SSH. Włączona: tylko reguła portu SSH, którego
+# żadna reguła wejścia nie wymienia, także przez profil, listę albo zakres w krotkach zapory (`ufw allow` zastąpiłby
+# regułę tego portu z inną akcją, a obok reguły z adresem otworzyłby port dla wszystkich); bez zmiany zasad, bez usuwania
+# reguł i bez ponownego włączenia. Bez portu SSH z `sshd -T` kończy się kodem 1 przed pierwszą zmianą zapory.
+wlacz_zapore() {
+  local porty port stan dopisane=""
+  if ! porty=$(porty_ssh); then
+    napisz "  Uwaga: sshd -T nie podał portu SSH, więc zapory nie zmieniam. Sprawdź: sshd -T | grep '^port'; potem uruchom instalator ponownie."
+    return 1
+  fi
+  if ! stan=$(LC_ALL=C ufw status 2> /dev/null); then
+    napisz "  Uwaga: ufw status nie działa, więc zapory nie zmieniam. Sprawdź: ufw status; potem uruchom instalator ponownie."
+    return 1
+  fi
+  if printf '%s\n' "$stan" | grep -qx 'Status: active'; then
+    for port in $porty; do
+      if ! printf '%s\n' "$stan" \
+        | awk -v p="$port" '($1 == p || $1 == p "/tcp") && !/[[:space:]]OUT[[:space:]]/ { jest = 1 } END { exit !jest }' \
+        && ! regula_portu_w_krotkach "$port"; then
+        ufw allow "$port/tcp" > /dev/null || return 1
+        dopisane="$dopisane $port"
+      fi
+    done
+    if [ -n "$dopisane" ]; then
+      gotowe "zapora już włączona; dopisana reguła SSH dla portu$dopisane (zasady i inne reguły bez zmian)"
+    else
+      gotowe "zapora już włączona z regułą SSH (zasady i reguły bez zmian)"
+    fi
+    return 0
+  fi
+  ufw default deny incoming > /dev/null || return 1
+  ufw default allow outgoing > /dev/null || return 1
+  for port in $porty; do
+    ufw allow "$port/tcp" > /dev/null || return 1
+  done
+  ufw --force enable > /dev/null || return 1
+  gotowe "zapora włączona: wejście tylko dla SSH (port ${porty//$'\n'/, })"
+}
+
 # --- 1. pakiety --------------------------------------------------------------------------------------------
 
 etap 1 "Pakiety systemu"
@@ -597,7 +674,7 @@ export DEBIAN_FRONTEND=noninteractive
 APT_CZEKAJ=(-o DPkg::Lock::Timeout=600)
 napisz "  Gdy system sam instaluje aktualizacje, apt czeka na nie do 10 minut."
 apt-get "${APT_CZEKAJ[@]}" update -q
-apt-get "${APT_CZEKAJ[@]}" install -y -q ca-certificates curl git jq tmux uidmap dbus-user-session
+apt-get "${APT_CZEKAJ[@]}" install -y -q ca-certificates curl git jq tmux uidmap dbus-user-session ufw
 
 ARCH=$(dpkg --print-architecture)
 KOD_UBUNTU=$(. /etc/os-release && printf '%s' "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")
@@ -669,6 +746,9 @@ if [ "$ARCH" = "amd64" ]; then
 else
   napisz "  Uwaga: mise $MISE_WERSJA instaluję tylko na amd64, a ten serwer to $ARCH. Pomijam mise."
 fi
+
+# Zapora: błąd nie przerywa instalatora (reszta nie zależy od zapory), a lista sprawdzeń pokaże ją jako „nie działa”.
+wlacz_zapore || napisz "  Zapory nie zmieniono; lista sprawdzeń pokaże ją jako „nie działa”."
 
 # --- 2. konta, grupy i reguła sudo -------------------------------------------------------------------------
 
@@ -1716,6 +1796,21 @@ umask_kont() {
   done
 }
 
+# zapora_tylko_ssh: zapora włączona, domyślna zasada wejścia deny albo reject i reguła ALLOW albo LIMIT dla każdego
+# portu SSH z `sshd -T`. Instalator nie zmienia zasad włączonej zapory, więc otwarte wejście daje tu „nie działa”.
+zapora_tylko_ssh() {
+  local porty port stan
+  porty=$(porty_ssh) || return 1
+  stan=$(LC_ALL=C ufw status verbose) || return 1
+  printf '%s\n' "$stan" | grep -qx 'Status: active' || return 1
+  printf '%s\n' "$stan" | grep -qE '^Default: (deny|reject) \(incoming\)' || return 1
+  for port in $porty; do
+    printf '%s\n' "$stan" \
+      | awk -v p="$port" '($1 == p || $1 == p "/tcp") && ($2 == "ALLOW" || $2 == "LIMIT") { jest = 1 } END { exit !jest }' \
+      || return 1
+  done
+}
+
 sprawdz "konto factory nie czyta i nie zmienia katalogu Maestro" \
   "tryb 0700 katalogu $OBS_HOME (ls -ld $OBS_HOME)" factory_nie_widzi_maestro
 sprawdz "Maestro czyta pliki Factory i projektów" \
@@ -1799,6 +1894,9 @@ sprawdz "przekazanie: maestro kładzie, factory czyta i usuwa" \
 sprawdz "folderu $SERWER/zaufane z v1.0.4 nie ma" "ls -ld $SERWER/zaufane" bez_zaufanych
 sprawdz "Maestro uruchamia skrypt startowy Factory" "plik $SUDOERS_CEL i $LIB/start-factory.sh" \
   sudo -u maestro sudo -n -u factory "$LIB/start-factory.sh"
+sprawdz "zapora włączona, wejście domyślnie zamknięte i otwarte dla SSH" \
+  "LC_ALL=C ufw status verbose (domyślna zasada wejścia deny i reguła ALLOW portu SSH) i sshd -T | grep '^port'" \
+  zapora_tylko_ssh
 
 napisz ""
 napisz "Wynik: działa $DZIALA, nie działa $NIE_DZIALA."

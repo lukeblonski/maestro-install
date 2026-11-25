@@ -4,7 +4,7 @@ Jeden skrypt stawia na czystym serwerze Ubuntu wszystko, czego potrzebują Facto
 
 ## Co skrypt robi
 
-1. Instaluje pakiety systemu, GitHub CLI i Dockera.
+1. Instaluje pakiety systemu, GitHub CLI i Dockera. Włącza zaporę serwera z wejściem otwartym tylko dla SSH, a przy włączonej zaporze tylko dopisuje regułę SSH i niczego nie usuwa.
 2. Zakłada dwa konta: `maestro` i `factory`. Factory nie widzi plików Maestro. Maestro czyta pliki Factory i ma jedną regułę sudo: uruchomienie skryptu startowego Factory jako `factory`.
 3. Instaluje Claude Code na obu kontach i dopisuje jego folder do ścieżki.
 4. Uruchamia Dockera bez roota na koncie `factory` i pobiera raz obraz przeglądarki do testów aplikacji (ok. 1 GB pobierania, 3,6 GB na dysku).
@@ -29,10 +29,10 @@ Ponowne uruchomienie jest bezpieczne. Skrypt pomija to, co już działa, i nie p
 Otwórz terminal w przeglądarce w panelu Hostingera (konto `root`) i wklej jedno polecenie:
 
 ```bash
-f=$(mktemp) && curl -fsSL https://raw.githubusercontent.com/lukeblonski/maestro-install/v1.0.21/instaluj.sh -o "$f" && echo "b3a47f4bfa8d6819c980a0c9a7a3529dfd62f5946028cb50dc515ab4ec867c16  $f" | sha256sum -c - && bash "$f"
+f=$(mktemp) && curl -fsSL https://raw.githubusercontent.com/lukeblonski/maestro-install/v1.0.22/instaluj.sh -o "$f" && echo "ed0507864271a6795b43c3ebddd7b8a979c4e1dee7827f3a7576e908be57c622  $f" | sha256sum -c - && bash "$f"
 ```
 
-Polecenie pobiera oznaczoną wersję `v1.0.21`, a nie główną gałąź, i uruchamia skrypt dopiero wtedy, gdy jego suma SHA-256 zgadza się z sumą w poleceniu. Polecenie weź z tego README na stronie repozytorium `github.com/lukeblonski/maestro-install`.
+Polecenie pobiera oznaczoną wersję `v1.0.22`, a nie główną gałąź, i uruchamia skrypt dopiero wtedy, gdy jego suma SHA-256 zgadza się z sumą w poleceniu. Polecenie weź z tego README na stronie repozytorium `github.com/lukeblonski/maestro-install`.
 
 ## Aktualizacja
 
